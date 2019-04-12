@@ -1,0 +1,15 @@
+library("survival")
+library("rms")
+library("survminer")
+
+data = read.csv("output/apache_features.csv", header = TRUE, sep="\t")
+data$logPriority <- log (data$priority)
+head(data)
+
+dd <- datadist(data)
+options(datadist = "dd")
+link <- cph(Surv(days, death) ~ rcs(logPriority,4), x=TRUE, y=TRUE, data = data)
+p <- Predict(link)
+plot(p$logPriority, p$yhat, type ="l", xlab = "logPriority", ylab = "Log_Relative_Hazard")
+lines(p$logPriority, p$lower, lty=2)
+lines(p$logPriority, p$upper, lty=2)
