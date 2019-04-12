@@ -27,13 +27,10 @@ from datetime import datetime, timezone
 
 def main():
     dp = DataProcessor()
-    df_json_features = dp.extract_features_from_json()
-    df_csv_features = dp.extract_features_from_csv()
-    df = pd.merge(df_json_features, df_csv_features,
-                  on='issuekey', how='outer')
+    df = dp.extract_features_from_json()
     df = dp.reduce(df)
 
-    path = "./output/apache_features.csv"
+    path = "./dataset/apache_features.csv"
     df.to_csv(path, sep='\t', index=False)
 
 
@@ -47,26 +44,33 @@ class DataProcessor:
         Returns:
             df: Dataframe containing issues as rows and features as columns
         """
-        scraped_issues_dir = os.fsencode("./input/issues/")
+        scraped_issues_dir = os.fsencode("./issues/")
         rows_list = []
         for filename in os.listdir(scraped_issues_dir):
             file_path = os.path.join(scraped_issues_dir, filename)
             issue = self.get_dict_from_JSON_file(file_path)
+
+            # features
             issuekey = self.get_feature_issuekey(filename)
             days = self.get_feature_days(issue)
             death = self.get_feature_death(issue)
             priority = self.get_feature_priority(issue)
             issuetype = self.get_feature_issuetype(issue)
+            fixversions = self.get_feature_fixversions(issue)
+            issuelinks = self.get_feature_issuelinks(issue)
 
             row = {'issuekey': issuekey,
                    'days': days,
                    'death': death,
                    'priority': priority,
                    'issuetype': issuetype,
+                   'fixversions': fixversions,
+                   'issuelinks': issuelinks,
                    }
             rows_list.append(row)
 
-        columns = ['issuekey', 'days', 'death', 'priority', 'issuetype']
+        columns = ['issuekey', 'days', 'death', 'priority',
+                   'issuetype', 'fixversions', 'issuelink']
         df = pd.DataFrame(rows_list, columns=columns)
         return df
 
@@ -97,20 +101,10 @@ class DataProcessor:
             df: Reduced dataframe.
         """
         # group features that contain too few examples
-        df.loc[df['issuetype'] > 4, 'issuetype'] = 5
-        df.loc[df['no_fixversion'] > 2, 'no_fixversion'] = 3
-        df.loc[df['no_issuelink'] > 3, 'no_issuelink'] = 4
-        df.loc[df['no_affectversion'] > 2, 'no_affectversion'] = 3
-
-        # separate reporterrep into quartiles
-        mask = (df['reporterrep'] >= 0) & (df['reporterrep'] <= 0.25)
-        df.loc[mask, 'reporterrep'] = 1
-        mask = (df['reporterrep'] > 0.25) & (df['reporterrep'] <= 0.5)
-        df.loc[mask, 'reporterrep'] = 2
-        mask = (df['reporterrep'] > 0.5) & (df['reporterrep'] <= 0.75)
-        df.loc[mask, 'reporterrep'] = 3
-        mask = (df['reporterrep'] > 0.75) & (df['reporterrep'] < 1)
-        df.loc[mask, 'reporterrep'] = 4
+        # df.loc[df['issuetype'] > 4, 'issuetype'] = 5
+        # df.loc[df['no_fixversion'] > 2, 'no_fixversion'] = 3
+        # df.loc[df['no_issuelink'] > 3, 'no_issuelink'] = 4
+        # df.loc[df['no_affectversion'] > 2, 'no_affectversion'] = 3
 
         return df
 
@@ -137,7 +131,6 @@ class DataProcessor:
         resolutiondate = issue['fields']['resolutiondate']
         opened_date = parse(opened_date)
         if resolutiondate is None:
-            print("Issue still open:" + issue['key'])
             current_datetime = datetime.now(timezone.utc)
             days = (current_datetime - opened_date).days
         else:
@@ -146,7 +139,7 @@ class DataProcessor:
         return days
 
     def get_feature_death(self, issue):
-        """ Gets the feature event of an issue
+        """ Gets the feature "death" of an issue
 
         Value of death=0 means the issue is censored at the end of the
         observation whereas death=1 means the issue is dead at the end
@@ -172,8 +165,12 @@ class DataProcessor:
         Returns:
             priority: Int containing the priority of the issue
         """
-        priority = issue['fields']['priority']['id']
-        return int(priority)
+        try:
+            priority = int(issue['fields']['priority']['id'])
+        except:
+            priority = -1
+            print("No priority: " + issue['key'])
+        return priority
 
     def get_feature_issuetype(self, issue):
         """ Gets feature "issuetype" of an issue
@@ -185,6 +182,43 @@ class DataProcessor:
         """
         issuetype = issue['fields']['issuetype']['id']
         return int(issuetype)
+
+    def get_feature_fixversions(self, issue):
+        """ Gets feature "fixversions" of an issue
+
+        Args:
+            issue: A dict containing an issue's data
+        Returns:
+            fixversions: Int containing number of fix versions
+        """
+        try:
+            fixversions = len(issue['fields']['fixVersions'])
+        except:
+            fixversions = -1
+            print("No fixversion: " + issue['key'])
+        return fixversions
+
+    # def get_feature_affectversions(self, issue):
+    #     """ Gets feature "affectversions" of an issue
+
+    #     Args:
+    #         issue: A dict containing an issue's data
+    #     Returns:
+    #         versions: Int containing number of fix affectversions
+    #     """
+    #     versions = len(issue['fields']['versions'])
+    #     return versions
+
+    def get_feature_issuelinks(self, issue):
+        """ Gets feature "issuelinks" of an issue
+
+        Args:
+            issue: A dict containing an issue's data
+        Returns:
+            issuelinks: Int containing number of fix issuelinks
+        """
+        issuelinks = len(issue['fields']['issuelinks'])
+        return issuelinks
 
     def get_dict_from_JSON_file(self, path):
         """ Extracts an issue's data from a JSON file
