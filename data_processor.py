@@ -1,5 +1,5 @@
 """
-This script parses JSON issues and creates a csv data set
+This script process the dataset for survival analysis
 Copyright (C) 2019  Noam Rabbani
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -11,7 +11,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-Email: contact@noamrabbani.com
+Email: hello@noamrabbani.com
 """
 
 
@@ -38,9 +38,14 @@ def main():
 
 
 class DataProcessor:
+    """ Handles data processing.
+    """
 
     def extract_features_from_json(self):
-        """ Extract features from JIRA issues and returns them as a dataframe
+        """ Extract features from issues that are saved as individual json files.
+
+        Returns:
+            df: Dataframe containing issues as rows and features as columns
         """
         scraped_issues_dir = os.fsencode("./input/issues/")
         rows_list = []
@@ -66,17 +71,30 @@ class DataProcessor:
         return df
 
     def extract_features_from_csv(self):
-        """ Extract features from original paper csv dataset and return them as a dataframe
+        """ Extract features from original paper csv dataset.
+
+        Returns:
+            df: Dataframe containing issues as rows and features as columns
         """
         original_dataset_path = "./input/original_dataset/apache_creation.csv"
         df = pd.read_csv(original_dataset_path)
         print(df.head())
         df = df.loc[:,
-                    ['issuekey', 'reporterrep', 'no_fixversion', 'no_issuelink', 'no_affectversion']]
+                    ['issuekey', 'reporterrep', 'no_fixversion',
+                     'no_issuelink', 'no_affectversion']]
         return df
 
     def reduce(self, df):
         """ Reduce and modifiy some features in the dataset
+
+        Example of operations include stratifying a feature's value into
+        quartiles and grouping the values of a feature when not enough
+        examples are included.
+
+        Args:
+            df: Dataframe issues as rows and features as columns
+        Returns:
+            df: Reduced dataframe.
         """
         # group features that contain too few examples
         df.loc[df['issuetype'] > 4, 'issuetype'] = 5
@@ -97,17 +115,28 @@ class DataProcessor:
         return df
 
     def get_feature_issuekey(self, issue_filename):
-        """ Return the feature issuekey of the issue as a string
+        """  Gets the issuekey from an issue's filename
+
+        Args:
+            issue_filename: Name of the JSON file containing an issue
+        Returns:
+            issue_key: Issuekey as a string
         """
-        return str(issue_filename)[2:-1]
+        issue_key = str(issue_filename)[2:-1]
+        return issue_key
 
     def get_feature_days(self, issue):
-        """ Return the feature survival (in days) of the issue as an int
+        """ Gets feature survival (in days) of an issue
+
+        Args:
+            issue: A dict containing an issue's data
+        Returns:
+            days: Number of days the issue survives as an int
         """
         opened_date = issue['fields']['created']
         resolutiondate = issue['fields']['resolutiondate']
         opened_date = parse(opened_date)
-        if resolutiondate == None:
+        if resolutiondate is None:
             print("Issue still open:" + issue['key'])
             current_datetime = datetime.now(timezone.utc)
             days = (current_datetime - opened_date).days
@@ -117,30 +146,53 @@ class DataProcessor:
         return days
 
     def get_feature_death(self, issue):
-        """ Return the feature event of the issue as an int
-            death=0 means the issue is alive, death=1 means the issue is dead
+        """ Gets the feature event of an issue
+
+        Value of death=0 means the issue is censored at the end of the
+        observation whereas death=1 means the issue is dead at the end
+        of the observation
+
+        Args:
+            issue: A dict containing an issue's data
+        Returns:
+            death: Int containing the death status
         """
         resolutiondate = issue['fields']['resolutiondate']
-        if resolutiondate == None:
+        if resolutiondate is None:
             death = 0
         else:
             death = 1
         return death
 
     def get_feature_priority(self, issue):
-        """ Return the feature priority of the issue as a int
+        """ Gets feature "priority" of an issue
+
+        Args:
+            issue: A dict containing an issue's data
+        Returns:
+            priority: Int containing the priority of the issue
         """
         priority = issue['fields']['priority']['id']
         return int(priority)
 
     def get_feature_issuetype(self, issue):
-        """ Return the feature issuetype of the issue as an int
+        """ Gets feature "issuetype" of an issue
+
+        Args:
+            issue: A dict containing an issue's data
+        Returns:
+            issuetype: Int containing the issuetype of the issue
         """
         issuetype = issue['fields']['issuetype']['id']
         return int(issuetype)
 
     def get_dict_from_JSON_file(self, path):
-        """ Return a dict containing an issue's data
+        """ Extracts an issue's data from a JSON file
+
+        Args:
+            path: path of a JSON file
+        Returns:
+            issue: Dict containing the issue's data
         """
         with open(path, 'r') as f:
             issue = json.load(f)
@@ -148,5 +200,4 @@ class DataProcessor:
 
 
 if __name__ == '__main__':
-    # unittest.main(exit=False)
     main()
