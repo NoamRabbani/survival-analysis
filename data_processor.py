@@ -27,10 +27,14 @@ from datetime import datetime, timezone
 
 def main():
     dp = DataProcessor()
-    df = dp.extract_features_from_json()
-    df = dp.reduce(df)
 
-    path = "./dataset/apache_features.csv"
+    # df = dp.extract_features_from_json()
+    # path = "./dataset/apache_features_raw.csv"
+    # df.to_csv(path, sep='\t', index=False)
+
+    df = pd.read_csv("./dataset/apache_features_raw.csv", sep='\t')
+    df = dp.reduce_df(df)
+    path = "./dataset/apache_features_filtered.csv"
     df.to_csv(path, sep='\t', index=False)
 
 
@@ -70,7 +74,7 @@ class DataProcessor:
             rows_list.append(row)
 
         columns = ['issuekey', 'days', 'death', 'priority',
-                   'issuetype', 'fixversions', 'issuelink']
+                   'issuetype', 'fixversions', 'issuelinks']
         df = pd.DataFrame(rows_list, columns=columns)
         return df
 
@@ -88,7 +92,7 @@ class DataProcessor:
                      'no_issuelink', 'no_affectversion']]
         return df
 
-    def reduce(self, df):
+    def reduce_df(self, df):
         """ Reduce and modifiy some features in the dataset
 
         Example of operations include stratifying a feature's value into
@@ -100,11 +104,18 @@ class DataProcessor:
         Returns:
             df: Reduced dataframe.
         """
+
+        # reduce
+        initial_len = df.shape[0]
+        df = df[df.priority != -1]
+        df = df[df.fixversions != -1]
+        final_len = df.shape[0]
+        print("Deleted {} rows".format(initial_len-final_len))
+
         # group features that contain too few examples
-        # df.loc[df['issuetype'] > 4, 'issuetype'] = 5
-        # df.loc[df['no_fixversion'] > 2, 'no_fixversion'] = 3
-        # df.loc[df['no_issuelink'] > 3, 'no_issuelink'] = 4
-        # df.loc[df['no_affectversion'] > 2, 'no_affectversion'] = 3
+        df.loc[df['priority'] >= 1000, 'priority'] -= 9999
+        df.loc[df['issuetype'] > 4, 'issuetype'] = 5
+        df.loc[df['fixversions'] > 3, 'fixversions'] = 4
 
         return df
 
