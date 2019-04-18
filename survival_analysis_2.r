@@ -9,7 +9,7 @@ issues = read.csv("dataset/apache_features_filtered.csv", header = TRUE, sep="\t
 
 covariates <- c("priority", "issuetype", "fixversions", "issuelinks")
 univ_formulas <- sapply(covariates,
-                        function(x) as.formula(paste('Surv(days, death)~', x)))
+                        function(x) as.formula(paste('Surv(starttime, endtime, death)~', x)))
                         
 univ_models <- lapply( univ_formulas, function(x){coxph(x, data = issues)})
 univ_results <- lapply(univ_models,
@@ -35,7 +35,7 @@ as.data.frame(res)
 # Multivariate cox regression analysis
 ####################################
 
-res.cox <- coxph(Surv(days, death) ~ priority + issuetype + fixversions, data = issues)
+res.cox <- coxph(Surv(starttime, endtime, death) ~ priority + fixversions + issuelinks, data = issues)
 summary(res.cox)
 
 # Plot the baseline survival function
@@ -45,8 +45,8 @@ ggsurvplot(fit, palette = "#2E9FDF", ggtheme = theme_minimal())
 # Plot survival depending on each covariate
 new_df <- with(issues,
                     data.frame(priority = c(1,2,3,4,5),
-                               issuetype = c(1,1,1,1,1),
-                               fixversions = c(0,0,0,0,0)
+                               fixversions = c(0,0,0,0,0),
+                               issuelinks = c(0,0,0,0,0)
                               )
                     )              
 fit <- survfit(res.cox, data = issues, newdata = new_df)
@@ -55,27 +55,28 @@ ggsurvplot(fit, conf.int = TRUE, legend.labs=c("Priority=1", "Priority=2", "Prio
 
 new_df <- with(issues,
                     data.frame(priority = c(1,1,1,1,1),
-                               issuetype = c(1,2,3,4,5),
-                               fixversions = c(0,0,0,0,0)
-                              )
-                    )              
-fit <- survfit(res.cox, data = issues, newdata = new_df)
-ggsurvplot(fit, conf.int = TRUE, legend.labs=c("Issuetype=1", "Issuetype=2", "Issuetype=3", "Issuetype=4", "Issuetype=5"),
-           ggtheme = theme_minimal())
-
-new_df <- with(issues,
-                    data.frame(priority = c(1,1,1,1,1),
-                               issuetype = c(1,1,1,1,1),
-                               fixversions = c(0,1,2,3,4)
+                               fixversions = c(0,1,2,3,4),
+                               issuelinks = c(0,0,0,0,0)
                               )
                     )              
 fit <- survfit(res.cox, data = issues, newdata = new_df)
 ggsurvplot(fit, conf.int = TRUE, legend.labs=c("Fixversions=0", "Fixversions=1", "Fixversions=2", "Fixversions=3", "Fixversions=4"),
            ggtheme = theme_minimal())
 
+new_df <- with(issues,
+                    data.frame(priority = c(1,1,1,1,1),
+                               fixversions = c(0,0,0,0,0),
+                               issuelinks = c(0,1,2,3,4)
+                              )
+                    )              
+fit <- survfit(res.cox, data = issues, newdata = new_df)
+ggsurvplot(fit, conf.int = TRUE, legend.labs=c("Issuelinks=0", "Issuelinks=1", "Issuelinks=2", "Issuelinks=3", "Issuelinks=4"),
+           ggtheme = theme_minimal())
 
-test = cox.zph(res.cox)
-ggcoxzph(test)
+
+test = cox.zph(res.cox, transform = "identity")
+ggcoxzph(test,  var = c("priority", "fixversions"))
+ggcoxzph(test,  var = c("issuelinks"))
 print(test)
 
 # Calculate and plot linearity two at a time

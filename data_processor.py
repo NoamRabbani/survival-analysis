@@ -56,7 +56,8 @@ class DataProcessor:
 
             # features
             issuekey = self.get_feature_issuekey(filename)
-            days = self.get_feature_days(issue)
+            starttime = self.get_feature_starttime(issue)
+            endtime = self.get_feature_endtime(issue)
             death = self.get_feature_death(issue)
             priority = self.get_feature_priority(issue)
             issuetype = self.get_feature_issuetype(issue)
@@ -64,7 +65,8 @@ class DataProcessor:
             issuelinks = self.get_feature_issuelinks(issue)
 
             row = {'issuekey': issuekey,
-                   'days': days,
+                   'starttime': starttime,
+                   'endtime': endtime,
                    'death': death,
                    'priority': priority,
                    'issuetype': issuetype,
@@ -73,8 +75,8 @@ class DataProcessor:
                    }
             rows_list.append(row)
 
-        columns = ['issuekey', 'days', 'death', 'priority',
-                   'issuetype', 'fixversions', 'issuelinks']
+        columns = ['issuekey', 'starttime', 'endtime', 'death',
+                   'priority', 'issuetype', 'fixversions', 'issuelinks']
         df = pd.DataFrame(rows_list, columns=columns)
         return df
 
@@ -112,10 +114,16 @@ class DataProcessor:
         final_len = df.shape[0]
         print("Deleted {} rows".format(initial_len-final_len))
 
+        # Project Cassandra's priority start at 10000 for some reason
+        df.loc[df['priority'] >= 10000, 'priority'] -= 9999
+
         # group features that contain too few examples
-        df.loc[df['priority'] >= 1000, 'priority'] -= 9999
         df.loc[df['issuetype'] > 4, 'issuetype'] = 5
         df.loc[df['fixversions'] > 3, 'fixversions'] = 4
+        df.loc[df['issuelinks'] > 3, 'issuelinks'] = 4
+
+        # Raise the minimum survival time to 1 day
+        df.loc[df['starttime'] == df['endtime'], 'endtime'] += 1
 
         return df
 
@@ -149,6 +157,39 @@ class DataProcessor:
             days = (resolutiondate - opened_date).days
         return days
 
+    def get_feature_starttime(self, issue):
+        """ Gets feature "starttime" of an issue
+
+        Args:
+            issue: A dict containing an issue's data
+        Returns:
+            days: Starting day measured in elapsed days after 2018/01/01
+        """
+        opened_date = parse(issue['fields']['created'])
+        date_2018_01_01 = parse("2018/01/01").replace(tzinfo=timezone.utc)
+        starttime = (opened_date - date_2018_01_01).days
+        return starttime
+
+    def get_feature_endtime(self, issue):
+        """ Gets feature "endtime" of an issue
+
+        Args:
+            issue: A dict containing an issue's data
+        Returns:
+            days: Ending day measured in elapsed days after 2018/01/01
+        """
+        resolutiondate = issue['fields']['resolutiondate']
+        date_2018_01_01 = parse("2018/01/01").replace(tzinfo=timezone.utc)
+
+        if resolutiondate is None:
+            current_datetime = datetime.now(timezone.utc)
+            endtime = (current_datetime - date_2018_01_01).days
+        else:
+            resolutiondate = parse(resolutiondate)
+            endtime = (resolutiondate - date_2018_01_01).days
+
+        return endtime
+
     def get_feature_death(self, issue):
         """ Gets the feature "death" of an issue
 
@@ -180,7 +221,6 @@ class DataProcessor:
             priority = int(issue['fields']['priority']['id'])
         except:
             priority = -1
-            print("No priority: " + issue['key'])
         return priority
 
     def get_feature_issuetype(self, issue):
@@ -209,6 +249,7 @@ class DataProcessor:
             print("No fixversion: " + issue['key'])
         return fixversions
 
+    # Removed this feature because some projects don't have affect versions
     # def get_feature_affectversions(self, issue):
     #     """ Gets feature "affectversions" of an issue
 
