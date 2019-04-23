@@ -28,27 +28,26 @@ from datetime import datetime, timezone
 def main():
     dp = DataProcessor()
 
-    # df = dp.extract_features_from_json()
-    # path = "./dataset/apache_features_raw.csv"
-    # df.to_csv(path, sep='\t', index=False)
+    df = dp.extract_features_from_json("./issues/")
+    df.to_csv("./dataset/apache_features_raw.csv", sep='\t', index=False)
 
     df = pd.read_csv("./dataset/apache_features_raw.csv", sep='\t')
     df = dp.reduce_df(df)
-    path = "./dataset/apache_features_filtered.csv"
-    df.to_csv(path, sep='\t', index=False)
+    df.to_csv("./dataset/apache_features_filtered.csv", sep='\t', index=False)
 
 
 class DataProcessor:
     """ Handles data processing.
     """
 
-    def extract_features_from_json(self):
+    def extract_features_from_json(self, scraped_issues_dir):
         """ Extract features from issues that are saved as individual json files.
 
+        Args:
+            scraped_issues_dir: Path to JSON issues
         Returns:
             df: Dataframe containing issues as rows and features as columns
         """
-        scraped_issues_dir = os.fsencode("./issues/")
         rows_list = []
         for filename in os.listdir(scraped_issues_dir):
             file_path = os.path.join(scraped_issues_dir, filename)
@@ -58,6 +57,7 @@ class DataProcessor:
             issuekey = self.get_feature_issuekey(filename)
             starttime = self.get_feature_starttime(issue)
             endtime = self.get_feature_endtime(issue)
+            days = endtime - starttime
             death = self.get_feature_death(issue)
             priority = self.get_feature_priority(issue)
             issuetype = self.get_feature_issuetype(issue)
@@ -67,6 +67,7 @@ class DataProcessor:
             row = {'issuekey': issuekey,
                    'starttime': starttime,
                    'endtime': endtime,
+                   'days': days,
                    'death': death,
                    'priority': priority,
                    'issuetype': issuetype,
@@ -75,7 +76,7 @@ class DataProcessor:
                    }
             rows_list.append(row)
 
-        columns = ['issuekey', 'starttime', 'endtime', 'death',
+        columns = ['issuekey', 'starttime', 'endtime', 'days', 'death',
                    'priority', 'issuetype', 'fixversions', 'issuelinks']
         df = pd.DataFrame(rows_list, columns=columns)
         return df
@@ -124,6 +125,7 @@ class DataProcessor:
 
         # Raise the minimum survival time to 1 day
         df.loc[df['starttime'] == df['endtime'], 'endtime'] += 1
+        df.loc[df['days'] == 0, 'days'] = 1
 
         return df
 
