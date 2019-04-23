@@ -130,6 +130,11 @@ print(test)
 #            ggtheme = theme_minimal())
 
 
+## STYLE FOR R PLOTS
+# ggsurvplot(fit, conf.int = TRUE, legend.labs=c("Reputation=1", "Reputation=2", "Reputation=3", "Reputation=4"),
+#            ggtheme = theme_minimal(),
+#             font.x = c(17, "plain", "black"), font.y = c(17, "plain", "black"), font.tickslab = c(15, "plain", "black"),
+#              xlab = "Time (days)",  font.legend = c(13,"plain", "black"), legend.title="")
 
 
                     

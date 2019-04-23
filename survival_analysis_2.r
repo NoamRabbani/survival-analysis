@@ -51,7 +51,9 @@ new_df <- with(issues,
                     )              
 fit <- survfit(res.cox, data = issues, newdata = new_df)
 ggsurvplot(fit, conf.int = TRUE, legend.labs=c("Priority=1", "Priority=2", "Priority=3", "Priority=4", "Priority=5"),
-           ggtheme = theme_minimal())
+           ggtheme = theme_minimal(),
+            font.x = c(17, "plain", "black"), font.y = c(17, "plain", "black"), font.tickslab = c(15, "plain", "black"),
+             xlab = "Time (days)",  font.legend = c(13,"plain", "black"), legend.title="")
 
 new_df <- with(issues,
                     data.frame(priority = c(1,1,1,1,1),
@@ -74,10 +76,10 @@ ggsurvplot(fit, conf.int = TRUE, legend.labs=c("Issuelinks=0", "Issuelinks=1", "
            ggtheme = theme_minimal())
 
 
-test = cox.zph(res.cox, transform = "identity")
-ggcoxzph(test,  var = c("priority", "fixversions"))
-ggcoxzph(test,  var = c("issuelinks"))
-print(test)
+# test = cox.zph(res.cox, transform = "identity")
+# ggcoxzph(test,  var = c("priority", "fixversions"))
+# ggcoxzph(test,  var = c("issuelinks"))
+# print(test)
 
 # Calculate and plot linearity two at a time
 # par(mfrow=c(2, 2))
