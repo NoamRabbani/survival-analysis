@@ -18,13 +18,21 @@ import pandas as pd
 
 
 def main():
-    df = pd.read_csv("./output/apache_features.csv", delimiter='\t')
+    exp = Experiments()
+
+    df = pd.read_csv("./dataset/apache_features_filtered.csv", delimiter='\t')
     print(df.head())
 
-    # count the number of issuetypes that are equal to 5
-    print((df.loc[df['issuetype'] == 5]).shape)
+    exp.print_mode(df, ['priority'])
 
 
+class Experiments:
+    """ Handles experiments for research on survival analysis
+    """
+
+    def print_mode(self, df, columns):
+        print("Mode of {}".format(columns))
+        print(df.loc[:,columns].mode())
 
 
 if __name__ == '__main__':
