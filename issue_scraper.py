@@ -22,43 +22,48 @@ import pandas
 
 def main():
     sc = IssueScraper()
-    sc.scrape_issues_created_in_2018()
+    sc.scrape_all_apache_issues()
 
 
 class IssueScraper:
 
-    def scrape_issues_created_in_2018(self):
-        """ Scrapes the issues that were opened in 2018
+    def scrape_all_apache_issues(self):
+        """ Scrapes all Apache issues
 
-            Scrapes all issues opened in 2018 in the Apache project and
-            saves them as individual JSON files
+            Scrapes all issues in the Apache project and saves them as
+            individual JSON files.
         """
         output_dir = './issues/'
         if not os.path.exists(output_dir):
             os.mkdir(output_dir)
 
-        start_at = 0
-        while True:
-            print(start_at)
-            url = (
-                'https://issues.apache.org/jira/rest/api/2/search?jql=' +
-                'created%20%3E%3D%202018-01-01%20AND%20created%20%3C%3D%202018-12-31&maxResults=-1&startAt={}'  # noqa
-                .format(start_at)
-            )
-            json_data = self.http_get_request(url)
+        years = [2000, 2001, 2002, 2003, 2004,
+                 2005, 2006, 2007, 2008, 2009,
+                 2010, 2011, 2012, 2013, 2014,
+                 2015, 2016, 2017, 2018, 2019]
+        for y in years:
+            print("Collecting year {}".format(y))
+            start_at = 0
+            while True:
+                print("Scraping issues {}-{}".format(start_at, start_at+1000))
+                url = (
+                    'https://issues.apache.org/jira/rest/api/2/search?jql=' +
+                    'created%20%3E%3D%20{}-01-01%20AND%20created%20%3C%3D%20{}-12-31&maxResults=-1&startAt={}'  # noqa
+                    .format(y, y, start_at)
+                )
+                json_data = self.http_get_request(url)
 
-            if len(json_data['issues']) == 0:
-                break
+                if len(json_data['issues']) == 0:
+                    break
 
-            for issue in json_data['issues']:
-                file_path = output_dir + issue['key']
-                if not os.path.exists(file_path):
-                    with open(file_path, 'w') as f:
-                        json.dump(issue, f)
-                    print(file_path + ' added')
-                else:
-                    print(file_path + ' already exists')
-            start_at += 1000
+                for issue in json_data['issues']:
+                    file_path = output_dir + issue['key']
+                    if not os.path.exists(file_path):
+                        with open(file_path, 'w') as f:
+                            json.dump(issue, f)
+                    else:
+                        print(file_path + ' already exists')
+                start_at += 1000
 
     def http_get_request(self, url):
         """ Makes and htttp GET request
