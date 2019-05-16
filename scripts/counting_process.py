@@ -53,9 +53,16 @@ class CountingProcess:
             path = os.path.join(issues_dir, filename)
             rows.extend(self.process_issue(path))
 
-        columns = ["issuekey", "start", "end", "is_dead",
-                   "priority", "is_assigned", "issuetype",
-                   "has_priority_change"]
+        columns = ["issuekey",
+                   "start",
+                   "end",
+                   "is_dead",
+                   "priority",
+                   "is_assigned",
+                   "issuetype",
+                   "has_priority_change",
+                   "has_desc_change"
+                   ]
         df = pd.DataFrame(rows, columns=columns)
         df.to_csv(output_dir, sep="\t", index=False)
 
@@ -107,6 +114,7 @@ class CountingProcess:
             issuetype = issue_states[curr_date]["issuetype"]
             has_priority_change = (
                 issue_states[curr_date]["has_priority_change"])
+            has_desc_change = issue_states[curr_date]["has_desc_change"]
             row = {"issuekey": issuekey,
                    "start": start,
                    "end": end,
@@ -114,7 +122,8 @@ class CountingProcess:
                    "priority": priority,
                    "is_assigned": is_assigned,
                    "issuetype": issuetype,
-                   "has_priority_change": has_priority_change
+                   "has_priority_change": has_priority_change,
+                   "has_desc_change": has_desc_change,
                    }
             rows.append(row)
             curr_idx += 1
@@ -141,10 +150,15 @@ class CountingProcess:
         priority = self.get_feature_priority(issue)
         is_assigned = self.get_feature_is_assigned(issue)
         issuetype = self.get_feature_issuetype(issue)
+        desc = self.get_feature_desc(issue)
 
-        state = {"issuekey": issuekey, "is_dead": is_dead,
-                 "priority": priority, "is_assigned": is_assigned,
-                 "issuetype": issuetype}
+        state = {"issuekey": issuekey,
+                 "is_dead": is_dead,
+                 "priority": priority,
+                 "is_assigned": is_assigned,
+                 "issuetype": issuetype,
+                 "desc": desc
+                 }
 
         bisect.insort(issue_states["dates"], date)
         issue_states[date] = state
@@ -169,6 +183,9 @@ class CountingProcess:
                 if item["field"] == "issuetype":
                     self.append_state_at_issuetype_change(
                         issue, item, date, issue_states)
+                if item["field"] == "description":
+                    self.append_state_at_desc_change(
+                        issue, item, date, issue_states)
 
     def append_state_at_creation_time(self, issue, issue_states):
         """ Appends the state of an issue at its creation time
@@ -191,16 +208,22 @@ class CountingProcess:
     def add_count_features(self, issue, issue_states):
         dates = issue_states["dates"]
         has_priority_change = 0
+        has_desc_change = 0
         for date in dates:
             if issue_states[date].get("previous_priority"):
                 has_priority_change = 1
+            if issue_states[date].get("previous_desc"):
+                has_desc_change = 1
             issue_states[date]["has_priority_change"] = has_priority_change
+            issue_states[date]["has_desc_change"] = has_desc_change
 
     def append_state_at_priority_change(self, issue, item, date, issue_states):
         """ Appends the state of an issue when the priority changes
 
         Args:
             issue: Dict that contains the issue's data
+            item: Dict that contains the item that was changed
+            date: Datetime on which the change occured
             issue_states: Dict containg the states of the issue at the dates
                           of interest
         """
@@ -222,6 +245,8 @@ class CountingProcess:
 
         Args:
             issue: Dict that contains the issue's data
+            item: Dict that contains the item that was changed
+            date: Datetime on which the change occured
             issue_states: Dict containg the states of the issue at the dates
                           of interest
         """
@@ -249,6 +274,8 @@ class CountingProcess:
 
         Args:
             issue: Dict that contains the issue's data
+            item: Dict that contains the item that was changed
+            date: Datetime on which the change occured
             issue_states: Dict containg the states of the issue at the dates
                           of interest
         """
@@ -257,11 +284,35 @@ class CountingProcess:
         if date > resolution_date:
             return
 
-        if date in issue_states["dates"]:
+        if date in dates:
             issue_states[date]["previous_issuetype"] = int(item["from"])
         else:
             state = self.infer_state(date, issue_states)
             state["previous_issuetype"] = int(item["from"])
+            bisect.insort(issue_states["dates"], date)
+            issue_states[date] = state
+
+    def append_state_at_desc_change(self, issue, item, date,
+                                    issue_states):
+        """ Appends the state of an issue when the issuetype changes
+
+        Args:
+            issue: Dict that contains the issue's data
+            item: Dict that contains the item that was changed
+            date: Datetime on which the change occured
+            issue_states: Dict containg the states of the issue at the dates
+                          of interest
+        """
+        dates = issue_states["dates"]
+        resolution_date = dates[-1]
+        if date > resolution_date:
+            return
+
+        if date in dates:
+            issue_states[date]["previous_desc"] = item["fromString"]
+        else:
+            state = self.infer_state(date, issue_states)
+            state["previous_desc"] = item["fromString"]
             bisect.insort(issue_states["dates"], date)
             issue_states[date] = state
 
@@ -295,11 +346,18 @@ class CountingProcess:
         else:
             issuetype = issue_states[next_date]["previous_issuetype"]
 
+        if reference_state.get("previous_desc") is None:
+            desc = issue_states[next_date]["desc"]
+        else:
+            desc = issue_states[next_date]["previous_desc"]
+
         state = {"issuekey": issuekey,
                  "is_dead": is_dead,
                  "priority": priority,
                  "is_assigned": is_assigned,
-                 "issuetype": issuetype}
+                 "issuetype": issuetype,
+                 "desc": desc
+                 }
 
         return state
 
@@ -315,7 +373,7 @@ class CountingProcess:
             priority = int(issue["fields"]["priority"]["id"])
         else:
             priority = -1
-            print("Malformed issue" + issue["key"])
+            print("Malformed issue: " + issue["key"])
         return priority
 
     def get_feature_is_assigned(self, issue):
@@ -344,8 +402,22 @@ class CountingProcess:
             issuetype = int(issue["fields"]["issuetype"]["id"])
         else:
             issuetype = -1
-            print("Malformed issue" + issue["key"])
+            print("Malformed issue: " + issue["key"])
         return issuetype
+
+    def get_feature_desc(self, issue):
+        """ Gets feature "desc" of an issue
+
+        Args:
+            issue: A dict containing an issue's data
+        Returns:
+            desc: String containing the description of an issue
+        """
+        if issue["fields"].get("description"):
+            desc = issue["fields"]["description"]
+        else:
+            desc = ""
+        return desc
 
 
 if __name__ == "__main__":
