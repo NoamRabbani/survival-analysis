@@ -53,11 +53,11 @@ class CountingProcess:
             path = os.path.join(issues_dir, filename)
             rows.extend(self.process_issue(path))
 
-        columns = ['issuekey', 'start', 'end', 'is_dead',
-                   'priority', "is_assigned", "issuetype",
+        columns = ["issuekey", "start", "end", "is_dead",
+                   "priority", "is_assigned", "issuetype",
                    "has_priority_change"]
         df = pd.DataFrame(rows, columns=columns)
-        df.to_csv(output_dir, sep='\t', index=False)
+        df.to_csv(output_dir, sep="\t", index=False)
 
     def process_issue(self, issue_path, max_observation_time=None):
         """ Extracts features from an issue that has been saved as JSON file
@@ -77,7 +77,7 @@ class CountingProcess:
 
         issue_states = {"dates": []}
         rows = []
-        dates = issue_states['dates']
+        dates = issue_states["dates"]
 
         self.append_state_at_resolution_time(
             issue, issue_states)
@@ -180,7 +180,7 @@ class CountingProcess:
         """
         date = parse(issue["fields"]["created"]).date()
 
-        if date in issue_states['dates']:
+        if date in issue_states["dates"]:
             return
         else:
             state = self.infer_state(date, issue_states)
@@ -189,7 +189,7 @@ class CountingProcess:
         issue_states[date] = state
 
     def add_count_features(self, issue, issue_states):
-        dates = issue_states['dates']
+        dates = issue_states["dates"]
         has_priority_change = 0
         for date in dates:
             if issue_states[date].get("previous_priority"):
@@ -204,16 +204,16 @@ class CountingProcess:
             issue_states: Dict containg the states of the issue at the dates
                           of interest
         """
-        dates = issue_states['dates']
+        dates = issue_states["dates"]
         resolution_date = dates[-1]
         if date > resolution_date:
             return
 
         if date in dates:
-            issue_states[date]["previous_priority"] = int(item['from'])
+            issue_states[date]["previous_priority"] = int(item["from"])
         else:
             state = self.infer_state(date, issue_states)
-            state["previous_priority"] = int(item['from'])
+            state["previous_priority"] = int(item["from"])
             bisect.insort(issue_states["dates"], date)
             issue_states[date] = state
 
@@ -225,12 +225,12 @@ class CountingProcess:
             issue_states: Dict containg the states of the issue at the dates
                           of interest
         """
-        dates = issue_states['dates']
+        dates = issue_states["dates"]
         resolution_date = dates[-1]
         if date > resolution_date:
             return
 
-        if item['from'] is None:
+        if item["from"] is None:
             previous_is_assigned = 0
         else:
             previous_is_assigned = 1
@@ -252,16 +252,16 @@ class CountingProcess:
             issue_states: Dict containg the states of the issue at the dates
                           of interest
         """
-        dates = issue_states['dates']
+        dates = issue_states["dates"]
         resolution_date = dates[-1]
         if date > resolution_date:
             return
 
-        if date in issue_states['dates']:
-            issue_states[date]["previous_issuetype"] = int(item['from'])
+        if date in issue_states["dates"]:
+            issue_states[date]["previous_issuetype"] = int(item["from"])
         else:
             state = self.infer_state(date, issue_states)
-            state["previous_issuetype"] = int(item['from'])
+            state["previous_issuetype"] = int(item["from"])
             bisect.insort(issue_states["dates"], date)
             issue_states[date] = state
 
@@ -274,26 +274,26 @@ class CountingProcess:
             state: Issuekey as a string
         """
         idx = bisect.bisect(issue_states["dates"], date)
-        next_date = issue_states['dates'][idx]
+        next_date = issue_states["dates"][idx]
 
         is_dead = 0
         reference_state = issue_states[next_date]
-        issuekey = reference_state.get('issuekey')
+        issuekey = reference_state.get("issuekey")
 
-        if reference_state.get('previous_priority') is None:
-            priority = issue_states[next_date]['priority']
+        if reference_state.get("previous_priority") is None:
+            priority = issue_states[next_date]["priority"]
         else:
-            priority = issue_states[next_date]['previous_priority']
+            priority = issue_states[next_date]["previous_priority"]
 
-        if reference_state.get('previous_is_assigned') is None:
-            is_assigned = issue_states[next_date]['is_assigned']
+        if reference_state.get("previous_is_assigned") is None:
+            is_assigned = issue_states[next_date]["is_assigned"]
         else:
-            is_assigned = issue_states[next_date]['previous_is_assigned']
+            is_assigned = issue_states[next_date]["previous_is_assigned"]
 
-        if reference_state.get('previous_issuetype') is None:
-            issuetype = issue_states[next_date]['issuetype']
+        if reference_state.get("previous_issuetype") is None:
+            issuetype = issue_states[next_date]["issuetype"]
         else:
-            issuetype = issue_states[next_date]['previous_issuetype']
+            issuetype = issue_states[next_date]["previous_issuetype"]
 
         state = {"issuekey": issuekey,
                  "is_dead": is_dead,
@@ -315,7 +315,7 @@ class CountingProcess:
             priority = int(issue["fields"]["priority"]["id"])
         else:
             priority = -1
-            print("Malformed issue" + issue['key'])
+            print("Malformed issue" + issue["key"])
         return priority
 
     def get_feature_is_assigned(self, issue):
@@ -344,7 +344,7 @@ class CountingProcess:
             issuetype = int(issue["fields"]["issuetype"]["id"])
         else:
             issuetype = -1
-            print("Malformed issue" + issue['key'])
+            print("Malformed issue" + issue["key"])
         return issuetype
 
 
