@@ -68,6 +68,7 @@ class DataParser:
             # Discard issue if it's malformed
             if priority == -1 or issuetype == -1:
                 discarded_issues += 1
+            # Append issue to dataset if it's well formed
             else:
                 row = {'issuekey': issuekey,
                        'starttime': starttime,

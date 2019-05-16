@@ -23,7 +23,7 @@ def main():
     df = pd.read_csv("./dataset/apache_features_filtered.csv", delimiter='\t')
     print(df.head())
 
-    exp.print_mode(df, ['priority'])
+    exp.print_mode(df, ['priority', 'issuetype'])
 
 
 class Experiments:
@@ -32,7 +32,7 @@ class Experiments:
 
     def print_mode(self, df, columns):
         print("Mode of {}".format(columns))
-        print(df.loc[:,columns].mode())
+        print(df.loc[:, columns].mode())
 
 
 if __name__ == '__main__':

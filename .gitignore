@@ -1,6 +1,7 @@
 #custom
 input
 issues
+issues_hbase
 
 # vscode
 *.code-workspace

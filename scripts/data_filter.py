@@ -28,12 +28,12 @@ from datetime import datetime, timezone
 
 
 def main():
-    dfil = DataFilter()
+    data_filter = DataFilter()
 
     df = pd.read_csv("./dataset/apache_features_raw.csv", sep='\t')
 
-    df = dfil.map_df(df)
-    df, discarded_rows = dfil.reduce_df(df)
+    df = data_filter.map_df(df)
+    df, discarded_rows = data_filter.reduce_df(df)
 
     print("Filtered {} rows".format(discarded_rows))
     df.to_csv("./dataset/apache_features_filtered.csv", sep='\t', index=False)
@@ -44,13 +44,18 @@ class DataFilter:
     """
 
     def map_df(self, df):
-        """ Maps features in the dataset
+        """ Maps features in the dataset from one value to another
 
         Args:
             df: Dataframe issues as rows and features as columns
         Returns:
             df: Mapped dataframe.
         """
+
+        # # Group priority_change_count into two categories (0, 1+)
+        # df.loc[df['priority_change_count'] == 2, 'priority_change_count'] = 1
+        # df.loc[df['priority_change_count'] == 3, 'priority_change_count'] = 1
+        # df.loc[df['priority_change_count'] == 4, 'priority_change_count'] = 1
 
         # Map priority integers to labels
         # df.loc[df['priority'] == 1, 'priority'] = 'blocker'
