@@ -2,6 +2,7 @@
 input
 issues
 issues_hbase
+*.csv#
 
 # vscode
 *.code-workspace

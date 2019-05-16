@@ -30,27 +30,34 @@ import bisect
 
 def main():
     cp = CountingProcess()
-    issues_dir = ("issues_hbase/")
-    rows = []
+    issues_dir = "issues_hbase/"
+    output_dir = "./dataset/hbase_features_raw.csv"
 
-    # rows = cp.process_issue("issues_hbase/HBASE-22013")
-
-    for filename in os.listdir(issues_dir):
-        path = os.path.join(issues_dir, filename)
-        rows.extend(cp.process_issue(path))
-
-    columns = ['issuekey', 'start', 'end', 'death',
-               'priority', "assignee", "issuetype", "priority_change_count"]
-    df = pd.DataFrame(rows, columns=columns)
-
-    df.to_csv("./dataset/hbase_features_raw.csv", sep='\t', index=False)
-
-    pass
+    cp.generate_dataset(issues_dir, output_dir)
+    # rows = cp.process_issue("issues_hbase/HBASE-18110")
 
 
 class CountingProcess:
     """ Handles parsing of JSON issues and transformation to counting process.
     """
+
+    def generate_dataset(self, issues_dir, output_dir):
+        """ Generates the dataset in the counting process format
+
+        Args:
+            issues_dir: Directory containing issues as separate JSON files
+            output_dir: Directory to output the CSV dataset
+        """
+        rows = []
+        for filename in os.listdir(issues_dir):
+            path = os.path.join(issues_dir, filename)
+            rows.extend(self.process_issue(path))
+
+        columns = ['issuekey', 'start', 'end', 'is_dead',
+                   'priority', "is_assigned", "issuetype",
+                   "has_priority_change"]
+        df = pd.DataFrame(rows, columns=columns)
+        df.to_csv(output_dir, sep='\t', index=False)
 
     def process_issue(self, issue_path, max_observation_time=None):
         """ Extracts features from an issue that has been saved as JSON file
@@ -94,16 +101,21 @@ class CountingProcess:
             issuekey = issue_states[curr_date]["issuekey"]
             start = (curr_date - creation_date).days
             end = (nxt_date - creation_date).days
-            death = issue_states[nxt_date]["death"]
+            is_dead = issue_states[nxt_date]["is_dead"]
             priority = issue_states[curr_date]["priority"]
-            assignee = issue_states[curr_date]["assignee"]
+            is_assigned = issue_states[curr_date]["is_assigned"]
             issuetype = issue_states[curr_date]["issuetype"]
-            priority_change_count = (
-                issue_states[curr_date]["priority_change_count"])
-            row = {"issuekey": issuekey, "start": start, "end": end,
-                   "death": death, "priority": priority, "assignee": assignee,
+            has_priority_change = (
+                issue_states[curr_date]["has_priority_change"])
+            row = {"issuekey": issuekey,
+                   "start": start,
+                   "end": end,
+                   "is_dead": is_dead,
+                   "priority": priority,
+                   "is_assigned": is_assigned,
                    "issuetype": issuetype,
-                   "priority_change_count": priority_change_count}
+                   "has_priority_change": has_priority_change
+                   }
             rows.append(row)
             curr_idx += 1
             nxt_idx += 1
@@ -120,18 +132,18 @@ class CountingProcess:
         """
         if issue["fields"]["resolutiondate"] is None:
             date = datetime.now(timezone.utc).date()
-            death = 0
+            is_dead = 0
         else:
             date = parse(issue["fields"]["resolutiondate"]).date()
-            death = 1
+            is_dead = 1
 
         issuekey = issue["key"]
         priority = self.get_feature_priority(issue)
-        assignee = self.get_feature_assignee(issue)
+        is_assigned = self.get_feature_is_assigned(issue)
         issuetype = self.get_feature_issuetype(issue)
 
-        state = {"issuekey": issuekey, "death": death,
-                 "priority": priority, "assignee": assignee,
+        state = {"issuekey": issuekey, "is_dead": is_dead,
+                 "priority": priority, "is_assigned": is_assigned,
                  "issuetype": issuetype}
 
         bisect.insort(issue_states["dates"], date)
@@ -167,7 +179,6 @@ class CountingProcess:
                           of interest
         """
         date = parse(issue["fields"]["created"]).date()
-        death = 0
 
         if date in issue_states['dates']:
             return
@@ -179,11 +190,11 @@ class CountingProcess:
 
     def add_count_features(self, issue, issue_states):
         dates = issue_states['dates']
-        priority_change_count = 0
+        has_priority_change = 0
         for date in dates:
             if issue_states[date].get("previous_priority"):
-                priority_change_count = 1
-            issue_states[date]["priority_change_count"] = priority_change_count
+                has_priority_change = 1
+            issue_states[date]["has_priority_change"] = has_priority_change
 
     def append_state_at_priority_change(self, issue, item, date, issue_states):
         """ Appends the state of an issue when the priority changes
@@ -220,15 +231,15 @@ class CountingProcess:
             return
 
         if item['from'] is None:
-            previous_assignee = 0
+            previous_is_assigned = 0
         else:
-            previous_assignee = 1
+            previous_is_assigned = 1
 
         if date in dates:
-            issue_states[date]["previous_assignee"] = previous_assignee
+            issue_states[date]["previous_is_assigned"] = previous_is_assigned
         else:
             state = self.infer_state(date, issue_states)
-            state["previous_assignee"] = previous_assignee
+            state["previous_is_assigned"] = previous_is_assigned
             bisect.insort(issue_states["dates"], date)
             issue_states[date] = state
 
@@ -265,26 +276,29 @@ class CountingProcess:
         idx = bisect.bisect(issue_states["dates"], date)
         next_date = issue_states['dates'][idx]
 
-        death = 0
+        is_dead = 0
         reference_state = issue_states[next_date]
         issuekey = reference_state.get('issuekey')
+
         if reference_state.get('previous_priority') is None:
             priority = issue_states[next_date]['priority']
         else:
             priority = issue_states[next_date]['previous_priority']
 
-        if reference_state.get('previous_assignee') is None:
-            assignee = issue_states[next_date]['assignee']
+        if reference_state.get('previous_is_assigned') is None:
+            is_assigned = issue_states[next_date]['is_assigned']
         else:
-            assignee = issue_states[next_date]['previous_assignee']
+            is_assigned = issue_states[next_date]['previous_is_assigned']
 
         if reference_state.get('previous_issuetype') is None:
             issuetype = issue_states[next_date]['issuetype']
         else:
             issuetype = issue_states[next_date]['previous_issuetype']
 
-        state = {"issuekey": issuekey, "death": death,
-                 "priority": priority, "assignee": assignee,
+        state = {"issuekey": issuekey,
+                 "is_dead": is_dead,
+                 "priority": priority,
+                 "is_assigned": is_assigned,
                  "issuetype": issuetype}
 
         return state
@@ -297,26 +311,26 @@ class CountingProcess:
         Returns:
             priority: Int containing the priority of the issue
         """
-        try:
+        if issue["fields"]["priority"].get("id"):
             priority = int(issue["fields"]["priority"]["id"])
-        except:
+        else:
             priority = -1
             print("Malformed issue" + issue['key'])
         return priority
 
-    def get_feature_assignee(self, issue):
-        """ Gets feature "assignee" of an issue
+    def get_feature_is_assigned(self, issue):
+        """ Gets feature "is_assigned" of an issue
 
         Args:
             issue: A dict containing an issue's data
         Returns:
-            assignee: Int (0,1) indicating if wether there's an assignee
+            is_assigned: Int (0,1) indicating if wether there's an assignee
         """
-        if issue["fields"]["assignee"] is None:
-            assignee = 0
+        if issue["fields"]["assignee"]:
+            is_assigned = 1
         else:
-            assignee = 1
-        return assignee
+            is_assigned = 0
+        return is_assigned
 
     def get_feature_issuetype(self, issue):
         """ Gets feature "issuetype" of an issue
@@ -326,9 +340,9 @@ class CountingProcess:
         Returns:
             issuetype: Int containing the issuetype of the issue
         """
-        try:
+        if issue["fields"]["issuetype"].get("id"):
             issuetype = int(issue["fields"]["issuetype"]["id"])
-        except:
+        else:
             issuetype = -1
             print("Malformed issue" + issue['key'])
         return issuetype
