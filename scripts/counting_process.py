@@ -147,10 +147,10 @@ class CountingProcess:
             is_dead = 1
 
         issuekey = issue["key"]
-        priority = self.get_feature_priority(issue)
-        is_assigned = self.get_feature_is_assigned(issue)
-        issuetype = self.get_feature_issuetype(issue)
-        desc = self.get_feature_desc(issue)
+        priority = self.get_feature("priority", issue)
+        is_assigned = self.get_feature("is_assigned", issue)
+        issuetype = self.get_feature("issuetype", issue)
+        desc = self.get_feature("desc", issue)
 
         state = {"issuekey": issuekey,
                  "is_dead": is_dead,
@@ -175,17 +175,17 @@ class CountingProcess:
             date = parse(change["created"]).date()
             for item in change["items"]:
                 if item["field"] == "priority":
-                    self.append_state_at_priority_change(
-                        issue, item, date, issue_states)
+                    self.append_state_at_feature_change(
+                        "priority", issue, item, date, issue_states)
                 if item["field"] == "assignee":
-                    self.append_state_at_assignee_change(
-                        issue, item, date, issue_states)
+                    self.append_state_at_feature_change(
+                        "assignee", issue, item, date, issue_states)
                 if item["field"] == "issuetype":
-                    self.append_state_at_issuetype_change(
-                        issue, item, date, issue_states)
+                    self.append_state_at_feature_change(
+                        "issuetype", issue, item, date, issue_states)
                 if item["field"] == "description":
-                    self.append_state_at_desc_change(
-                        issue, item, date, issue_states)
+                    self.append_state_at_feature_change(
+                        "desc", issue, item, date, issue_states)
 
     def append_state_at_creation_time(self, issue, issue_states):
         """ Appends the state of an issue at its creation time
@@ -217,10 +217,12 @@ class CountingProcess:
             issue_states[date]["has_priority_change"] = has_priority_change
             issue_states[date]["has_desc_change"] = has_desc_change
 
-    def append_state_at_priority_change(self, issue, item, date, issue_states):
+    def append_state_at_feature_change(self, feature, issue, item, date,
+                                       issue_states):
         """ Appends the state of an issue when the priority changes
 
         Args:
+            feature: Feature that changed
             issue: Dict that contains the issue's data
             item: Dict that contains the item that was changed
             date: Datetime on which the change occured
@@ -232,89 +234,49 @@ class CountingProcess:
         if date > resolution_date:
             return
 
-        if date in dates:
-            issue_states[date]["previous_priority"] = int(item["from"])
+        if feature == "priority":
+            if date in dates:
+                issue_states[date]["previous_priority"] = int(item["from"])
+            else:
+                state = self.infer_state(date, issue_states)
+                state["previous_priority"] = int(item["from"])
+                bisect.insort(issue_states["dates"], date)
+                issue_states[date] = state
+
+        elif feature == "assignee":
+            if item["from"] is None:
+                previous_is_assigned = 0
+            else:
+                previous_is_assigned = 1
+            if date in dates:
+                issue_states[date]["previous_is_assigned"] = (
+                    previous_is_assigned)
+            else:
+                state = self.infer_state(date, issue_states)
+                state["previous_is_assigned"] = previous_is_assigned
+                bisect.insort(issue_states["dates"], date)
+                issue_states[date] = state
+
+        elif feature == "issuetype":
+            if date in dates:
+                issue_states[date]["previous_issuetype"] = int(item["from"])
+            else:
+                state = self.infer_state(date, issue_states)
+                state["previous_issuetype"] = int(item["from"])
+                bisect.insort(issue_states["dates"], date)
+                issue_states[date] = state
+
+        elif feature == "desc":
+            if date in dates:
+                issue_states[date]["previous_desc"] = item["fromString"]
+            else:
+                state = self.infer_state(date, issue_states)
+                state["previous_desc"] = item["fromString"]
+                bisect.insort(issue_states["dates"], date)
+                issue_states[date] = state
+
         else:
-            state = self.infer_state(date, issue_states)
-            state["previous_priority"] = int(item["from"])
-            bisect.insort(issue_states["dates"], date)
-            issue_states[date] = state
-
-    def append_state_at_assignee_change(self, issue, item, date, issue_states):
-        """ Appends the state of an issue when the assignee changes
-
-        Args:
-            issue: Dict that contains the issue's data
-            item: Dict that contains the item that was changed
-            date: Datetime on which the change occured
-            issue_states: Dict containg the states of the issue at the dates
-                          of interest
-        """
-        dates = issue_states["dates"]
-        resolution_date = dates[-1]
-        if date > resolution_date:
-            return
-
-        if item["from"] is None:
-            previous_is_assigned = 0
-        else:
-            previous_is_assigned = 1
-
-        if date in dates:
-            issue_states[date]["previous_is_assigned"] = previous_is_assigned
-        else:
-            state = self.infer_state(date, issue_states)
-            state["previous_is_assigned"] = previous_is_assigned
-            bisect.insort(issue_states["dates"], date)
-            issue_states[date] = state
-
-    def append_state_at_issuetype_change(self, issue, item, date,
-                                         issue_states):
-        """ Appends the state of an issue when the issuetype changes
-
-        Args:
-            issue: Dict that contains the issue's data
-            item: Dict that contains the item that was changed
-            date: Datetime on which the change occured
-            issue_states: Dict containg the states of the issue at the dates
-                          of interest
-        """
-        dates = issue_states["dates"]
-        resolution_date = dates[-1]
-        if date > resolution_date:
-            return
-
-        if date in dates:
-            issue_states[date]["previous_issuetype"] = int(item["from"])
-        else:
-            state = self.infer_state(date, issue_states)
-            state["previous_issuetype"] = int(item["from"])
-            bisect.insort(issue_states["dates"], date)
-            issue_states[date] = state
-
-    def append_state_at_desc_change(self, issue, item, date,
-                                    issue_states):
-        """ Appends the state of an issue when the issuetype changes
-
-        Args:
-            issue: Dict that contains the issue's data
-            item: Dict that contains the item that was changed
-            date: Datetime on which the change occured
-            issue_states: Dict containg the states of the issue at the dates
-                          of interest
-        """
-        dates = issue_states["dates"]
-        resolution_date = dates[-1]
-        if date > resolution_date:
-            return
-
-        if date in dates:
-            issue_states[date]["previous_desc"] = item["fromString"]
-        else:
-            state = self.infer_state(date, issue_states)
-            state["previous_desc"] = item["fromString"]
-            bisect.insort(issue_states["dates"], date)
-            issue_states[date] = state
+            raise ValueError()
 
     def infer_state(self, date, issue_states):
         """  Infers the state of an issue at a given point in time
@@ -361,63 +323,47 @@ class CountingProcess:
 
         return state
 
-    def get_feature_priority(self, issue):
-        """ Gets feature "priority" of an issue
+    def get_feature(self, feature, issue):
+        """ Gets a feature from an issue's
 
         Args:
+            feature: String of the feature to get
             issue: A dict containing an issue's data
         Returns:
             priority: Int containing the priority of the issue
         """
-        if issue["fields"]["priority"].get("id"):
-            priority = int(issue["fields"]["priority"]["id"])
+        if feature == "priority":
+            if issue["fields"]["priority"].get("id"):
+                priority = int(issue["fields"]["priority"]["id"])
+            else:
+                priority = -1
+                print("Malformed issue: " + issue["key"])
+            return priority
+
+        elif feature == "is_assigned":
+            if issue["fields"]["assignee"]:
+                is_assigned = 1
+            else:
+                is_assigned = 0
+            return is_assigned
+
+        elif feature == "issuetype":
+            if issue["fields"]["issuetype"].get("id"):
+                issuetype = int(issue["fields"]["issuetype"]["id"])
+            else:
+                issuetype = -1
+                print("Malformed issue: " + issue["key"])
+            return issuetype
+
+        elif feature == "desc":
+            if issue["fields"].get("description"):
+                desc = issue["fields"]["description"]
+            else:
+                desc = ""
+            return desc
+
         else:
-            priority = -1
-            print("Malformed issue: " + issue["key"])
-        return priority
-
-    def get_feature_is_assigned(self, issue):
-        """ Gets feature "is_assigned" of an issue
-
-        Args:
-            issue: A dict containing an issue's data
-        Returns:
-            is_assigned: Int (0,1) indicating if wether there's an assignee
-        """
-        if issue["fields"]["assignee"]:
-            is_assigned = 1
-        else:
-            is_assigned = 0
-        return is_assigned
-
-    def get_feature_issuetype(self, issue):
-        """ Gets feature "issuetype" of an issue
-
-        Args:
-            issue: A dict containing an issue's data
-        Returns:
-            issuetype: Int containing the issuetype of the issue
-        """
-        if issue["fields"]["issuetype"].get("id"):
-            issuetype = int(issue["fields"]["issuetype"]["id"])
-        else:
-            issuetype = -1
-            print("Malformed issue: " + issue["key"])
-        return issuetype
-
-    def get_feature_desc(self, issue):
-        """ Gets feature "desc" of an issue
-
-        Args:
-            issue: A dict containing an issue's data
-        Returns:
-            desc: String containing the description of an issue
-        """
-        if issue["fields"].get("description"):
-            desc = issue["fields"]["description"]
-        else:
-            desc = ""
-        return desc
+            raise ValueError()
 
 
 if __name__ == "__main__":
