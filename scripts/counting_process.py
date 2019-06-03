@@ -31,9 +31,9 @@ import bisect
 def main():
     cp = CountingProcess()
     issues_dir = "issues_hbase/"
-    output_dir = "./dataset/hbase_features_raw.csv"
+    output_path = "./dataset/hbase_features_raw.csv"
 
-    cp.generate_dataset(issues_dir, output_dir)
+    cp.generate_dataset(issues_dir, output_path)
     # rows = cp.process_issue("issues_hbase/HBASE-18110")
 
 
@@ -41,12 +41,12 @@ class CountingProcess:
     """ Handles parsing of JSON issues and transformation to counting process.
     """
 
-    def generate_dataset(self, issues_dir, output_dir):
+    def generate_dataset(self, issues_dir, output_path):
         """ Generates the dataset in the counting process format
 
         Args:
             issues_dir: Directory containing issues as separate JSON files
-            output_dir: Directory to output the CSV dataset
+            output_path: Path to output the CSV dataset
         """
         rows = []
         for filename in os.listdir(issues_dir):
@@ -61,12 +61,13 @@ class CountingProcess:
                    "is_assigned",
                    "issuetype",
                    "has_priority_change",
-                   "has_desc_change"
+                   "has_desc_change",
+                   "comment_count"
                    ]
         df = pd.DataFrame(rows, columns=columns)
-        df.to_csv(output_dir, sep="\t", index=False)
+        df.to_csv(output_path, sep="\t", index=False)
 
-    def process_issue(self, issue_path, max_observation_time=None):
+    def process_issue(self, issue_path):
         """ Extracts features from an issue that has been saved as JSON file
 
         Processes a JSON file containing an issue's data to extract relevant
@@ -91,14 +92,8 @@ class CountingProcess:
         self.append_states_from_changelog(issue, issue_states)
         self.append_state_at_creation_time(issue, issue_states)
 
+        self.add_comment_features(issue, issue_states)
         self.add_count_features(issue, issue_states)
-
-        # Ignore issues that have been open for more than max_observation_time
-        if max_observation_time:
-            opening_date = dates[0]
-            resolution_date = dates[-1]
-            if (resolution_date - opening_date).days > max_observation_time:
-                return []
 
         # two pointer approach to building a counting process dataset
         curr_idx, nxt_idx = 0, 1
@@ -115,6 +110,7 @@ class CountingProcess:
             has_priority_change = (
                 issue_states[curr_date]["has_priority_change"])
             has_desc_change = issue_states[curr_date]["has_desc_change"]
+            comment_count = issue_states[curr_date]["comment_count"]
             row = {"issuekey": issuekey,
                    "start": start,
                    "end": end,
@@ -124,6 +120,7 @@ class CountingProcess:
                    "issuetype": issuetype,
                    "has_priority_change": has_priority_change,
                    "has_desc_change": has_desc_change,
+                   "comment_count": comment_count
                    }
             rows.append(row)
             curr_idx += 1
@@ -201,11 +198,17 @@ class CountingProcess:
             return
         else:
             state = self.infer_state(date, issue_states)
-
-        bisect.insort(issue_states["dates"], date)
-        issue_states[date] = state
+            bisect.insort(issue_states["dates"], date)
+            issue_states[date] = state
 
     def add_count_features(self, issue, issue_states):
+        """ Goes through the issue states and add count features
+
+        Args:
+            issue: Dict that contains the issue's data
+            issue_states: Dict containg the states of the issue at the dates
+                          of interest
+        """
         dates = issue_states["dates"]
         has_priority_change = 0
         has_desc_change = 0
@@ -216,6 +219,43 @@ class CountingProcess:
                 has_desc_change = 1
             issue_states[date]["has_priority_change"] = has_priority_change
             issue_states[date]["has_desc_change"] = has_desc_change
+
+    def add_comment_features(self, issue, issue_states):
+        """ Adds the comment_count feature to the issue_states
+
+        Args:
+            issue: Dict that contains the issue's data
+            issue_states: Dict containg the states of the issue at the dates
+                          of interest
+        """
+        dates = issue_states["dates"]
+        comment_count = 0
+
+        # We first do a pass on the comment log and update states on dates
+        # where comments have been written
+        for comment in issue["comments"]:
+            date = parse(comment["created"]).date()
+            resolution_date = dates[-1]
+            if date > resolution_date:
+                break
+
+            comment_count += 1
+            if date in dates:
+                issue_states[date]["comment_count"] = comment_count
+            else:
+                state = self.infer_state(date, issue_states)
+                state["comment_count"] = comment_count
+                bisect.insort(issue_states["dates"], date)
+                issue_states[date] = state
+
+        # We then do a pass on all states to give each of them the proper
+        # comment_count feature
+        comment_count = 0
+        for date in dates:
+            if issue_states[date].get("comment_count") is None:
+                issue_states[date]["comment_count"] = comment_count
+            else:
+                comment_count = issue_states[date]["comment_count"]
 
     def append_state_at_feature_change(self, feature, issue, item, date,
                                        issue_states):
@@ -282,36 +322,39 @@ class CountingProcess:
         """  Infers the state of an issue at a given point in time
 
         Args:
-            issue: Dict that contains the issue's data
+            date: date of the state we want to infer
+            issue_states: Dict containg the states of the issue at the dates
+                          of interest
         Returns:
             state: Issuekey as a string
         """
         idx = bisect.bisect(issue_states["dates"], date)
+
         next_date = issue_states["dates"][idx]
+        reference_state = issue_states[next_date]
 
         is_dead = 0
-        reference_state = issue_states[next_date]
-        issuekey = reference_state.get("issuekey")
+        issuekey = reference_state["issuekey"]
 
         if reference_state.get("previous_priority") is None:
-            priority = issue_states[next_date]["priority"]
+            priority = reference_state["priority"]
         else:
-            priority = issue_states[next_date]["previous_priority"]
+            priority = reference_state["previous_priority"]
 
         if reference_state.get("previous_is_assigned") is None:
-            is_assigned = issue_states[next_date]["is_assigned"]
+            is_assigned = reference_state["is_assigned"]
         else:
-            is_assigned = issue_states[next_date]["previous_is_assigned"]
+            is_assigned = reference_state["previous_is_assigned"]
 
         if reference_state.get("previous_issuetype") is None:
-            issuetype = issue_states[next_date]["issuetype"]
+            issuetype = reference_state["issuetype"]
         else:
-            issuetype = issue_states[next_date]["previous_issuetype"]
+            issuetype = reference_state["previous_issuetype"]
 
         if reference_state.get("previous_desc") is None:
-            desc = issue_states[next_date]["desc"]
+            desc = reference_state["desc"]
         else:
-            desc = issue_states[next_date]["previous_desc"]
+            desc = reference_state["previous_desc"]
 
         state = {"issuekey": issuekey,
                  "is_dead": is_dead,

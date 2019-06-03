@@ -22,21 +22,23 @@ import json
 import os
 import datetime
 import pandas as pd
+import numpy as np
 from dateutil.parser import parse
 from copy import deepcopy
 from datetime import datetime, timezone
 
 
 def main():
+    dataset_input_path = "./dataset/hbase_features_raw.csv"
+    dataset_output_path = "./dataset/hbase_features_filtered.csv"
+
     data_filter = DataFilter()
-
-    df = pd.read_csv("./dataset/apache_features_raw.csv", sep='\t')
-
+    df = pd.read_csv(dataset_input_path, sep='\t')
     df = data_filter.map_df(df)
     df, discarded_rows = data_filter.reduce_df(df)
-
     print("Filtered {} rows".format(discarded_rows))
-    df.to_csv("./dataset/apache_features_filtered.csv", sep='\t', index=False)
+
+    df.to_csv(dataset_output_path, sep='\t', index=False)
 
 
 class DataFilter:
@@ -52,28 +54,12 @@ class DataFilter:
             df: Mapped dataframe.
         """
 
-        # # Group priority_change_count into two categories (0, 1+)
-        # df.loc[df['priority_change_count'] == 2, 'priority_change_count'] = 1
-        # df.loc[df['priority_change_count'] == 3, 'priority_change_count'] = 1
-        # df.loc[df['priority_change_count'] == 4, 'priority_change_count'] = 1
+        # Group sparse issuetype categories ( < 1%)
+        df.loc[df['issuetype'] == 13, 'issuetype'] = 5
+        df.loc[df['issuetype'] == 14, 'issuetype'] = 5
 
-        # Map priority integers to labels
-        # df.loc[df['priority'] == 1, 'priority'] = 'blocker'
-        # df.loc[df['priority'] == 2, 'priority'] = 'critical'
-        # df.loc[df['priority'] == 3, 'priority'] = 'major'
-        # df.loc[df['priority'] == 4, 'priority'] = 'minor'
-        # df.loc[df['priority'] == 5, 'priority'] = 'trivial'
-
-        # Map issuetype integers to labels
-        # df.loc[df['issuetype'] == 1, 'issuetype'] = 'bug'
-        # df.loc[df['issuetype'] == 2, 'issuetype'] = 'newfeature'
-        # df.loc[df['issuetype'] == 3, 'issuetype'] = 'task'
-        # df.loc[df['issuetype'] == 4, 'issuetype'] = 'improvement'
-        # df.loc[df['issuetype'] == 5, 'issuetype'] = 'other'
-
-        # Raise the minimum survival time to 1 day
-        # df.loc[df['starttime'] == df['endtime'], 'endtime'] += 1
-        # df.loc[df['days'] == 0, 'days'] = 1
+        # Add one to comment counts
+        # df['comment_count'] += 1
 
         return df
 
@@ -87,12 +73,8 @@ class DataFilter:
         """
         initial_len = len(df)
 
-        # Remove 14,993 CASSANDRA issues because their priority does not
-        # conform to the 1-5 scale
-        df = df[~df.issuekey.str.contains('CASSANDRA')]
-
         # Remove issues that survive more than 3 years
-        df = df[df.days < 1095]
+        # df = df[df.days < 1095]
 
         discarded_rows = initial_len - len(df)
 

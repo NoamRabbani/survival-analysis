@@ -1,7 +1,7 @@
 library("survival")
 library("survminer")
 
-issues = read.csv("dataset/hbase_features_raw.csv", header = TRUE, sep="\t")
+issues = read.csv("dataset/hbase_features_filtered.csv", header = TRUE, sep="\t")
 
 # transform columns into factors with the modes as first value
 issues$priority <- factor(issues$priority, levels=c(3,1,2,4,5))
@@ -9,6 +9,8 @@ issues$is_assigned <- factor(issues$is_assigned)
 issues$issuetype <- factor(issues$issuetype)
 issues$has_priority_change <- factor(issues$has_priority_change)
 issues$has_desc_change <- factor(issues$has_desc_change)
+
+summary(issues)
 
 # Univariate regression for priority
 res.cox <- coxph(Surv(start, end, is_dead) ~ priority, data = issues)
@@ -49,7 +51,7 @@ new_df <- with(issues,
                               )
                     )
 fit <- survfit(res.cox, data = issues, newdata = new_df)
-ggsurvplot(fit, censor = FALSE, legend.labs=c(1,2,3,4,5,6,7,13,14))
+ggsurvplot(fit, censor = FALSE, legend.labs=c(1,2,3,4,5,6,7))
 summary(res.cox)
 test = cox.zph(res.cox, transform = "identity")
 print(test)
@@ -84,3 +86,10 @@ summary(res.cox)
 test = cox.zph(res.cox, transform = "identity")
 print(test)
 
+# Univariate regression for comment_count
+res.cox <- coxph(Surv(start, end, is_dead) ~ comment_count, data = issues)
+fit <- survfit(res.cox, data = issues)
+ggsurvplot(fit, censor = FALSE, palette = "#2E9FDF", ggtheme = theme_minimal())
+summary(res.cox)
+test = cox.zph(res.cox, transform = "identity")
+print(test)

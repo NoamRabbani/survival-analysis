@@ -21,26 +21,26 @@ import pandas
 
 
 def main():
+    output_dir = './issues_hbase/'
     sc = IssueScraper()
 
     years = [2017, 2018, 2019]
     projects = ["HBASE"]
-    output_dir = './issues_hbase/'
-
-    sc.scrape_all_apache_issues(projects, years, output_dir)
+    # sc.scrape_issues(projects, years, output_dir)
+    sc.scrape_issue_comments(output_dir)
 
 
 class IssueScraper:
 
-    def scrape_all_apache_issues(self, projects, years, output_dir):
-        """ Scrapes all Apache issues
+    def scrape_issues(self, projects, years, output_dir):
+        """ Scrapes issues given a project and year range
 
-        Scrapes all issues in the Apache project and saves them as
-        individual JSON files.
+        Scrapes issues project and saves them as individual JSON files.
 
         Args:
             projects: Apache projects to scrape
             years: List of years in which the issues were opened in
+            output_dir: Directory where issues get saved as JSON files
         """
         if not os.path.exists(output_dir):
             os.mkdir(output_dir)
@@ -70,6 +70,48 @@ class IssueScraper:
                         else:
                             print(file_path + ' already exists')
                     start_at += 1000
+
+    def scrape_issue_comments(self, issues_dir):
+        """ Scrapes and appends comments for each issue in issues_dir
+
+        JIRA does not support scraping the comments of an issue along all its
+        other fields. Rather, each comment log has to  be scraped individually
+        with a GET request. The comments are then appended to each issue's JSON
+        file.
+
+        Args:
+            issues_dir: Directory that contains JSON issues
+        """
+        missing_issues = []
+        for filename in os.listdir(issues_dir):
+            path = os.path.join(issues_dir, filename)
+
+            with open(path, "r") as f:
+                issue_json_data = json.load(f)
+
+            if issue_json_data.get('comments'):
+                print("Already scraped {}".format(filename))
+                continue
+
+            url = (
+                'https://issues.apache.org/jira/rest/api/2/issue/' +
+                filename +
+                '/comment'
+            )
+            print("Scraping {}".format(filename))
+            comment_json_data = self.http_get_request(url)
+
+            try:
+                issue_json_data['comments'] = comment_json_data['comments']
+            except:
+                missing_issues.append(filename)
+                print("Could not scrape comments for {}".format(filename))
+
+            with open(path, 'w') as f:
+                json.dump(issue_json_data, f)
+
+        with open('missing_issues', 'w') as f:
+            json.dump(missing_issues, f)
 
     def http_get_request(self, url):
         """ Makes and htttp GET request
