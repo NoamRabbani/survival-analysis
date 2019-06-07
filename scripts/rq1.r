@@ -93,3 +93,11 @@ ggsurvplot(fit, censor = FALSE, palette = "#2E9FDF", ggtheme = theme_minimal())
 summary(res.cox)
 test = cox.zph(res.cox, transform = "identity")
 print(test)
+
+# Univariate regression for link_count
+res.cox <- coxph(Surv(start, end, is_dead) ~ link_count, data = issues)
+fit <- survfit(res.cox, data = issues)
+ggsurvplot(fit, censor = FALSE, palette = "#2E9FDF", ggtheme = theme_minimal())
+summary(res.cox)
+test = cox.zph(res.cox, transform = "identity")
+print(test)

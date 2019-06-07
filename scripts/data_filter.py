@@ -76,6 +76,11 @@ class DataFilter:
         # Remove issues that survive more than 3 years
         # df = df[df.days < 1095]
 
+        # Manually remove malformed issues
+
+        # issuelink count does not make sense
+        df = df[df.issuekey != "HBASE-12851"]
+
         discarded_rows = initial_len - len(df)
 
         return df, discarded_rows

@@ -21,20 +21,22 @@ import unittest
 import json
 import os
 import datetime
+import bisect
+import logging
 import pandas as pd
 from dateutil.parser import parse
 from copy import deepcopy
 from datetime import datetime, timezone
-import bisect
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, filename="log", filemode='w')
     cp = CountingProcess()
     issues_dir = "issues_hbase/"
     output_path = "./dataset/hbase_features_raw.csv"
 
     cp.generate_dataset(issues_dir, output_path)
-    # rows = cp.process_issue("issues_hbase/HBASE-18110")
+    # rows = cp.process_issue("issues_hbase/HBASE-16609")
 
 
 class CountingProcess:
@@ -51,7 +53,8 @@ class CountingProcess:
         rows = []
         for filename in os.listdir(issues_dir):
             path = os.path.join(issues_dir, filename)
-            rows.extend(self.process_issue(path))
+            issue_rows = self.process_issue(path)
+            rows.extend(issue_rows)
 
         columns = ["issuekey",
                    "start",
@@ -62,7 +65,8 @@ class CountingProcess:
                    "issuetype",
                    "has_priority_change",
                    "has_desc_change",
-                   "comment_count"
+                   "comment_count",
+                   "link_count"
                    ]
         df = pd.DataFrame(rows, columns=columns)
         df.to_csv(output_path, sep="\t", index=False)
@@ -83,23 +87,33 @@ class CountingProcess:
         with open(issue_path, "r") as f:
             issue = json.load(f)
 
-        issue_states = {"dates": []}
+        issue_states = {}
+        issue_dates = []
         rows = []
-        dates = issue_states["dates"]
 
-        self.append_state_at_resolution_time(
-            issue, issue_states)
-        self.append_states_from_changelog(issue, issue_states)
-        self.append_state_at_creation_time(issue, issue_states)
+        creation_date = parse(issue["fields"]["created"]).date()
+        if issue["fields"]["resolutiondate"] is None:
+            resolution_date = datetime.now(timezone.utc).date()
+        else:
+            resolution_date = parse(issue["fields"]["resolutiondate"]).date()
 
-        self.add_comment_features(issue, issue_states)
-        self.add_count_features(issue, issue_states)
+        if creation_date == resolution_date:
+            logging.info("Filtered out {} because resolution date is equal to "
+                         "creation date".format(issue["key"]))
+            return rows
+
+        self.append_state_at_current_time(issue, issue_states, issue_dates)
+        self.append_states_from_changelog(issue, issue_states, issue_dates)
+        self.append_state_at_creation_time(issue, issue_states, issue_dates)
+        self.append_state_at_resolution_time(issue, issue_states, issue_dates)
+
+        self.add_comment_features(issue, issue_states, issue_dates)
+        self.add_count_features(issue, issue_states, issue_dates)
 
         # two pointer approach to building a counting process dataset
         curr_idx, nxt_idx = 0, 1
-        creation_date = dates[0]
-        while nxt_idx < len(dates):
-            curr_date, nxt_date = dates[curr_idx], dates[nxt_idx]
+        while nxt_idx < len(issue_dates):
+            curr_date, nxt_date = issue_dates[curr_idx], issue_dates[nxt_idx]
             issuekey = issue_states[curr_date]["issuekey"]
             start = (curr_date - creation_date).days
             end = (nxt_date - creation_date).days
@@ -111,6 +125,7 @@ class CountingProcess:
                 issue_states[curr_date]["has_priority_change"])
             has_desc_change = issue_states[curr_date]["has_desc_change"]
             comment_count = issue_states[curr_date]["comment_count"]
+            link_count = issue_states[curr_date]["link_count"]
             row = {"issuekey": issuekey,
                    "start": start,
                    "end": end,
@@ -120,99 +135,139 @@ class CountingProcess:
                    "issuetype": issuetype,
                    "has_priority_change": has_priority_change,
                    "has_desc_change": has_desc_change,
-                   "comment_count": comment_count
+                   "comment_count": comment_count,
+                   "link_count": link_count
                    }
             rows.append(row)
-            curr_idx += 1
-            nxt_idx += 1
+            if is_dead:
+                break
+            else:
+                curr_idx += 1
+                nxt_idx += 1
 
         return rows
 
-    def append_state_at_resolution_time(self, issue, issue_states):
-        """ Appends the state of an issue at its resolution time
+    def append_state_at_current_time(self, issue, issue_states, issue_dates):
+        """ Appends the state of an issue at the current time.
 
         Args:
-            issue: Dict that contains the issue's data
+            issue: Dict that contains the issue's data.
             issue_states: Dict containg the states of the issue at the dates
-                          of interest
+                          of interest.
+            issue_dates: Dates of interest, on which an issue changes its
+                         state.
         """
-        if issue["fields"]["resolutiondate"] is None:
-            date = datetime.now(timezone.utc).date()
-            is_dead = 0
-        else:
-            date = parse(issue["fields"]["resolutiondate"]).date()
-            is_dead = 1
+        date = datetime.now(timezone.utc).date()
+        is_dead = 0
 
         issuekey = issue["key"]
         priority = self.get_feature("priority", issue)
         is_assigned = self.get_feature("is_assigned", issue)
         issuetype = self.get_feature("issuetype", issue)
         desc = self.get_feature("desc", issue)
+        link_count = self.get_feature("link_count", issue)
 
         state = {"issuekey": issuekey,
                  "is_dead": is_dead,
                  "priority": priority,
                  "is_assigned": is_assigned,
                  "issuetype": issuetype,
-                 "desc": desc
+                 "desc": desc,
+                 "link_count": link_count
                  }
 
-        bisect.insort(issue_states["dates"], date)
+        bisect.insort(issue_dates, date)
         issue_states[date] = state
 
-    def append_states_from_changelog(self, issue, issue_states):
-        """ Extract states from an issue's changelog in reverse chronogical order
+    def append_states_from_changelog(self, issue, issue_states, issue_dates):
+        """ Extract states from an issue's changelog in reverse chronogical order.
 
         Args:
             issue: Dict that contains the issue's data
             issue_states: Dict containg the states of the issue at the dates
-                          of interest
+                          of interest.
+            issue_dates: Dates of interest, on which an issue changes its
+                         state.
         """
         for change in reversed(issue["changelog"]["histories"]):
             date = parse(change["created"]).date()
             for item in change["items"]:
                 if item["field"] == "priority":
                     self.append_state_at_feature_change(
-                        "priority", issue, item, date, issue_states)
+                        "priority", issue, item, date, issue_states,
+                        issue_dates)
                 if item["field"] == "assignee":
                     self.append_state_at_feature_change(
-                        "assignee", issue, item, date, issue_states)
+                        "assignee", issue, item, date, issue_states,
+                        issue_dates)
                 if item["field"] == "issuetype":
                     self.append_state_at_feature_change(
-                        "issuetype", issue, item, date, issue_states)
+                        "issuetype", issue, item, date, issue_states,
+                        issue_dates)
                 if item["field"] == "description":
                     self.append_state_at_feature_change(
-                        "desc", issue, item, date, issue_states)
+                        "desc", issue, item, date, issue_states,
+                        issue_dates)
+                if item["field"] == "Link":
+                    self.append_state_at_feature_change(
+                        "link_count", issue, item, date, issue_states,
+                        issue_dates)
 
-    def append_state_at_creation_time(self, issue, issue_states):
-        """ Appends the state of an issue at its creation time
+    def append_state_at_creation_time(self, issue, issue_states,
+                                      issue_dates):
+        """ Appends the state of an issue at its creation time.
 
         Args:
             issue: Dict that contains the issue's data
             issue_states: Dict containg the states of the issue at the dates
-                          of interest
+                          of interest.
+            issue_dates: Dates of interest, on which an issue changes its
+                         state.
         """
         date = parse(issue["fields"]["created"]).date()
 
-        if date in issue_states["dates"]:
+        if date in issue_dates:
             return
         else:
-            state = self.infer_state(date, issue_states)
-            bisect.insort(issue_states["dates"], date)
+            state = self.infer_state(date, issue_states, issue_dates)
+            bisect.insort(issue_dates, date)
             issue_states[date] = state
 
-    def add_count_features(self, issue, issue_states):
-        """ Goes through the issue states and add count features
+    def append_state_at_resolution_time(self, issue, issue_states, issue_dates):
+        """ Appends the state of an issue at its resolution time.
 
         Args:
             issue: Dict that contains the issue's data
             issue_states: Dict containg the states of the issue at the dates
-                          of interest
+                          of interest.
+            issue_dates: Dates of interest, on which an issue changes its
+                         state.
         """
-        dates = issue_states["dates"]
+        if issue["fields"]["resolutiondate"] is None:
+            return
+        else:
+            resolution_date = parse(issue["fields"]["resolutiondate"]).date()
+            is_dead = 1
+            if resolution_date in issue_dates:
+                issue_states[resolution_date]["is_dead"] = is_dead
+            else:
+                state = self.infer_state(
+                    resolution_date, issue_states, issue_dates)
+                state["is_dead"] = is_dead
+                bisect.insort(issue_dates, resolution_date)
+                issue_states[resolution_date] = state
+
+    def add_count_features(self, issue, issue_states, issue_dates):
+        """ Goes through the issue states and add count features.
+
+        Args:
+            issue: Dict that contains the issue's data.
+            issue_states: Dict containg the states of the issue at the dates
+                          of interest.
+        """
         has_priority_change = 0
         has_desc_change = 0
-        for date in dates:
+        for date in issue_dates:
             if issue_states[date].get("previous_priority"):
                 has_priority_change = 1
             if issue_states[date].get("previous_desc"):
@@ -220,67 +275,61 @@ class CountingProcess:
             issue_states[date]["has_priority_change"] = has_priority_change
             issue_states[date]["has_desc_change"] = has_desc_change
 
-    def add_comment_features(self, issue, issue_states):
+    def add_comment_features(self, issue, issue_states, issue_dates):
         """ Adds the comment_count feature to the issue_states
 
         Args:
             issue: Dict that contains the issue's data
             issue_states: Dict containg the states of the issue at the dates
                           of interest
+            issue_dates: Dates of interest, on which an issue changes its
+                         state.
         """
-        dates = issue_states["dates"]
         comment_count = 0
 
         # We first do a pass on the comment log and update states on dates
         # where comments have been written
         for comment in issue["comments"]:
             date = parse(comment["created"]).date()
-            resolution_date = dates[-1]
-            if date > resolution_date:
-                break
-
             comment_count += 1
-            if date in dates:
+            if date in issue_dates:
                 issue_states[date]["comment_count"] = comment_count
             else:
-                state = self.infer_state(date, issue_states)
+                state = self.infer_state(date, issue_states, issue_dates)
                 state["comment_count"] = comment_count
-                bisect.insort(issue_states["dates"], date)
+                bisect.insort(issue_dates, date)
                 issue_states[date] = state
 
         # We then do a pass on all states to give each of them the proper
         # comment_count feature
         comment_count = 0
-        for date in dates:
+        for date in issue_dates:
             if issue_states[date].get("comment_count") is None:
                 issue_states[date]["comment_count"] = comment_count
             else:
                 comment_count = issue_states[date]["comment_count"]
 
     def append_state_at_feature_change(self, feature, issue, item, date,
-                                       issue_states):
-        """ Appends the state of an issue when the priority changes
+                                       issue_states, issue_dates):
+        """ Appends the state of an issue when a feature changes.
 
         Args:
-            feature: Feature that changed
-            issue: Dict that contains the issue's data
-            item: Dict that contains the item that was changed
-            date: Datetime on which the change occured
+            feature: Feature that changed.
+            issue: Dict that contains the issue's data.
+            item: Dict that contains the item that was changed.
+            date: Datetime on which the change occured.
             issue_states: Dict containg the states of the issue at the dates
-                          of interest
+                          of interest.
+            issue_dates: Dates of interest, on which an issue changes its
+                         state.
         """
-        dates = issue_states["dates"]
-        resolution_date = dates[-1]
-        if date > resolution_date:
-            return
-
         if feature == "priority":
-            if date in dates:
+            if date in issue_dates:
                 issue_states[date]["previous_priority"] = int(item["from"])
             else:
-                state = self.infer_state(date, issue_states)
+                state = self.infer_state(date, issue_states, issue_dates)
                 state["previous_priority"] = int(item["from"])
-                bisect.insort(issue_states["dates"], date)
+                bisect.insort(issue_dates, date)
                 issue_states[date] = state
 
         elif feature == "assignee":
@@ -288,49 +337,80 @@ class CountingProcess:
                 previous_is_assigned = 0
             else:
                 previous_is_assigned = 1
-            if date in dates:
+            if date in issue_dates:
                 issue_states[date]["previous_is_assigned"] = (
                     previous_is_assigned)
             else:
-                state = self.infer_state(date, issue_states)
+                state = self.infer_state(date, issue_states, issue_dates)
                 state["previous_is_assigned"] = previous_is_assigned
-                bisect.insort(issue_states["dates"], date)
+                bisect.insort(issue_dates, date)
                 issue_states[date] = state
 
         elif feature == "issuetype":
-            if date in dates:
+            if date in issue_dates:
                 issue_states[date]["previous_issuetype"] = int(item["from"])
             else:
-                state = self.infer_state(date, issue_states)
+                state = self.infer_state(date, issue_states, issue_dates)
                 state["previous_issuetype"] = int(item["from"])
-                bisect.insort(issue_states["dates"], date)
+                bisect.insort(issue_dates, date)
                 issue_states[date] = state
 
         elif feature == "desc":
-            if date in dates:
+            if date in issue_dates:
                 issue_states[date]["previous_desc"] = item["fromString"]
             else:
-                state = self.infer_state(date, issue_states)
+                state = self.infer_state(date, issue_states, issue_dates)
                 state["previous_desc"] = item["fromString"]
-                bisect.insort(issue_states["dates"], date)
+                bisect.insort(issue_dates, date)
+                issue_states[date] = state
+
+        elif feature == "link_count":
+            if date in issue_dates:
+                if item["from"]:
+                    if issue_states[date].get("previous_link_count"):
+                        issue_states[date]["previous_link_count"] += 1
+                    else:
+                        issue_states[date]["previous_link_count"] = (
+                            issue_states[date]["link_count"] + 1)
+                elif item["to"]:
+                    if issue_states[date].get("previous_link_count"):
+                        issue_states[date]["previous_link_count"] -= 1
+                    else:
+                        issue_states[date]["previous_link_count"] = (
+                            issue_states[date]["link_count"] - 1)
+                else:
+                    logging.INFO(
+                        "Issue has both 'to' and 'from' in link feature")
+            else:
+                state = self.infer_state(date, issue_states, issue_dates)
+                if item["from"]:
+                    state["previous_link_count"] = (
+                        state["link_count"] + 1)
+                elif item["to"]:
+                    state["previous_link_count"] = (
+                        state["link_count"] - 1)
+                else:
+                    logging.INFO(
+                        "Issue has both 'to' and 'from' in link feature")
+                bisect.insort(issue_dates, date)
                 issue_states[date] = state
 
         else:
             raise ValueError()
 
-    def infer_state(self, date, issue_states):
-        """  Infers the state of an issue at a given point in time
+    def infer_state(self, date, issue_states, issue_dates):
+        """  Infers the state of an issue at a given point in time.
 
         Args:
-            date: date of the state we want to infer
+            date: Date on which we want to infer a state.
             issue_states: Dict containg the states of the issue at the dates
-                          of interest
+                          of interest.
         Returns:
-            state: Issuekey as a string
+            state: Issuekey as a string.
         """
-        idx = bisect.bisect(issue_states["dates"], date)
+        idx = bisect.bisect(issue_dates, date)
 
-        next_date = issue_states["dates"][idx]
+        next_date = issue_dates[idx]
         reference_state = issue_states[next_date]
 
         is_dead = 0
@@ -356,12 +436,18 @@ class CountingProcess:
         else:
             desc = reference_state["previous_desc"]
 
+        if reference_state.get("previous_link_count") is None:
+            link_count = reference_state["link_count"]
+        else:
+            link_count = reference_state["previous_link_count"]
+
         state = {"issuekey": issuekey,
                  "is_dead": is_dead,
                  "priority": priority,
                  "is_assigned": is_assigned,
                  "issuetype": issuetype,
-                 "desc": desc
+                 "desc": desc,
+                 "link_count": link_count,
                  }
 
         return state
@@ -404,6 +490,13 @@ class CountingProcess:
             else:
                 desc = ""
             return desc
+
+        elif feature == "link_count":
+            if issue["fields"].get("issuelinks"):
+                link_count = len(issue["fields"]["issuelinks"])
+            else:
+                link_count = 0
+            return link_count
 
         else:
             raise ValueError()
