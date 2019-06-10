@@ -3,6 +3,7 @@ input
 issues
 issues_hbase
 *.csv#
+XDG_CACHE_HOME
 
 # vscode
 *.code-workspace

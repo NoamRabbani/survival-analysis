@@ -36,7 +36,7 @@ def main():
     output_path = "./dataset/hbase_features_raw.csv"
 
     cp.generate_dataset(issues_dir, output_path)
-    # rows = cp.process_issue("issues_hbase/HBASE-16609")
+    # rows = cp.process_issue("issues_hbase/HBASE-17887")
 
 
 class CountingProcess:
@@ -66,7 +66,8 @@ class CountingProcess:
                    "has_priority_change",
                    "has_desc_change",
                    "comment_count",
-                   "link_count"
+                   "link_count",
+                   "affect_count",
                    ]
         df = pd.DataFrame(rows, columns=columns)
         df.to_csv(output_path, sep="\t", index=False)
@@ -126,6 +127,8 @@ class CountingProcess:
             has_desc_change = issue_states[curr_date]["has_desc_change"]
             comment_count = issue_states[curr_date]["comment_count"]
             link_count = issue_states[curr_date]["link_count"]
+            affect_count = (
+                issue_states[curr_date]["affect_count"])
             row = {"issuekey": issuekey,
                    "start": start,
                    "end": end,
@@ -136,7 +139,8 @@ class CountingProcess:
                    "has_priority_change": has_priority_change,
                    "has_desc_change": has_desc_change,
                    "comment_count": comment_count,
-                   "link_count": link_count
+                   "link_count": link_count,
+                   "affect_count": affect_count
                    }
             rows.append(row)
             if is_dead:
@@ -166,6 +170,7 @@ class CountingProcess:
         issuetype = self.get_feature("issuetype", issue)
         desc = self.get_feature("desc", issue)
         link_count = self.get_feature("link_count", issue)
+        affect_count = self.get_feature("affect_count", issue)
 
         state = {"issuekey": issuekey,
                  "is_dead": is_dead,
@@ -173,7 +178,8 @@ class CountingProcess:
                  "is_assigned": is_assigned,
                  "issuetype": issuetype,
                  "desc": desc,
-                 "link_count": link_count
+                 "link_count": link_count,
+                 "affect_count": affect_count
                  }
 
         bisect.insort(issue_dates, date)
@@ -212,6 +218,10 @@ class CountingProcess:
                     self.append_state_at_feature_change(
                         "link_count", issue, item, date, issue_states,
                         issue_dates)
+                if item["field"] == "Version":
+                    self.append_state_at_feature_change(
+                        "affect_count", issue, item, date,
+                        issue_states, issue_dates)
 
     def append_state_at_creation_time(self, issue, issue_states,
                                       issue_dates):
@@ -395,6 +405,37 @@ class CountingProcess:
                 bisect.insort(issue_dates, date)
                 issue_states[date] = state
 
+        elif feature == "affect_count":
+            if date in issue_dates:
+                if item["from"]:
+                    if issue_states[date].get("previous_affect_count"):
+                        issue_states[date]["previous_affect_count"] += 1
+                    else:
+                        issue_states[date]["previous_affect_count"] = (
+                            issue_states[date]["affect_count"] + 1)
+                elif item["to"]:
+                    if issue_states[date].get("previous_affect_count"):
+                        issue_states[date]["previous_affect_count"] -= 1
+                    else:
+                        issue_states[date]["previous_affect_count"] = (
+                            issue_states[date]["affect_count"] - 1)
+                else:
+                    logging.INFO(
+                        "Issue has both 'to' and 'from' in affect feature")
+            else:
+                state = self.infer_state(date, issue_states, issue_dates)
+                if item["from"]:
+                    state["previous_affect_count"] = (
+                        state["affect_count"] + 1)
+                elif item["to"]:
+                    state["previous_affect_count"] = (
+                        state["affect_count"] - 1)
+                else:
+                    logging.INFO(
+                        "Issue has both 'to' and 'from' in affect feature")
+                bisect.insort(issue_dates, date)
+                issue_states[date] = state
+
         else:
             raise ValueError()
 
@@ -441,6 +482,11 @@ class CountingProcess:
         else:
             link_count = reference_state["previous_link_count"]
 
+        if reference_state.get("previous_affect_count") is None:
+            affect_count = reference_state["affect_count"]
+        else:
+            affect_count = reference_state["previous_affect_count"]
+
         state = {"issuekey": issuekey,
                  "is_dead": is_dead,
                  "priority": priority,
@@ -448,6 +494,7 @@ class CountingProcess:
                  "issuetype": issuetype,
                  "desc": desc,
                  "link_count": link_count,
+                 "affect_count": affect_count
                  }
 
         return state
@@ -497,6 +544,13 @@ class CountingProcess:
             else:
                 link_count = 0
             return link_count
+
+        elif feature == "affect_count":
+            if issue["fields"].get("versions"):
+                affect_count = len(issue["fields"]["versions"])
+            else:
+                affect_count = 0
+            return affect_count
 
         else:
             raise ValueError()
