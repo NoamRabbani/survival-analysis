@@ -20,7 +20,7 @@ import pandas as pd
 def main():
     exp = Experiments()
 
-    df = pd.read_csv("./dataset/apache_features_filtered.csv", delimiter='\t')
+    df = pd.read_csv("./dataset/hbase_features_filtered.csv", delimiter='\t')
     print(df.head())
 
     exp.print_mode(df, ['priority', 'issuetype'])
