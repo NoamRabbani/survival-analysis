@@ -79,9 +79,9 @@ class CountingProcess:
                    "end",
                    "is_dead",
                    "priority",
+                   "issuetype",
                    "assignee",
                    "is_assigned",
-                   "issuetype",
                    "comment_count",
                    "link_count",
                    "affect_count",
@@ -96,7 +96,7 @@ class CountingProcess:
         df.to_csv(output_paths["hbase_raw"], sep="\t", index=False)
 
     def generate_issue_states(self, issue_path, reputations=None,
-                              workloads=None, survival_treshold=None):
+                              workloads=None, survival_threshold=None):
         """ Generates a history of the states of an issue.
 
         Args:
@@ -121,8 +121,8 @@ class CountingProcess:
                          "creation date".format(issue["key"]))
             return [], {}
 
-        if survival_treshold:
-            if (resolution_date - creation_date).days > survival_treshold:
+        if survival_threshold:
+            if (resolution_date - creation_date).days > survival_threshold:
                 return [], {}
 
         issue_dates = []

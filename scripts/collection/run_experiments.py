@@ -24,6 +24,7 @@ def main():
     print(df.head())
 
     exp.print_mode(df, ['priority', 'issuetype'])
+    exp.print_median(df, ['assignee_workload'])
 
 
 class Experiments:
@@ -32,6 +33,10 @@ class Experiments:
 
     def print_mode(self, df, columns):
         print("Mode of {}".format(columns))
+        print(df.loc[:, columns].mode())
+
+    def print_median(self, df, columns):
+        print("Median of {}".format(columns))
         print(df.loc[:, columns].mode())
 
 
