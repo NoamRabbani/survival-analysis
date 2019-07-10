@@ -80,6 +80,7 @@ class CountingProcess:
                    "is_dead",
                    "priority",
                    "assignee",
+                   "is_assigned",
                    "issuetype",
                    "comment_count",
                    "link_count",
@@ -95,7 +96,7 @@ class CountingProcess:
         df.to_csv(output_paths["hbase_raw"], sep="\t", index=False)
 
     def generate_issue_states(self, issue_path, reputations=None,
-                              workloads=None):
+                              workloads=None, survival_treshold=None):
         """ Generates a history of the states of an issue.
 
         Args:
@@ -109,9 +110,6 @@ class CountingProcess:
         with open(issue_path, "r") as f:
             issue = json.load(f)
 
-        issue_states = {}
-        issue_dates = []
-
         creation_date = parse(issue["fields"]["created"]).date()
         if issue["fields"]["resolutiondate"] is None:
             resolution_date = datetime.now(timezone.utc).date()
@@ -121,8 +119,14 @@ class CountingProcess:
         if creation_date == resolution_date:
             logging.info("Filtered out {} because resolution date is equal to "
                          "creation date".format(issue["key"]))
-            return issue_dates, issue_states
+            return [], {}
 
+        if survival_treshold:
+            if (resolution_date - creation_date).days > survival_treshold:
+                return [], {}
+
+        issue_dates = []
+        issue_states = {}
         self.append_state_at_current_time(issue, issue_states, issue_dates)
         self.append_states_from_changelog(issue, issue_states, issue_dates)
         self.append_state_at_creation(issue, issue_states, issue_dates)
@@ -139,7 +143,8 @@ class CountingProcess:
                 issue, issue_states, issue_dates, reputations, creation_date,
                 resolution_date)
         if reputations and workloads:
-            self.add_count_features(issue, issue_states, issue_dates)
+            self.add_count_features(
+                issue, issue_states, issue_dates, count=True)
 
         return issue_dates, issue_states
 
@@ -160,6 +165,7 @@ class CountingProcess:
             is_dead = issue_states[nxt_date]["is_dead"]
             priority = issue_states[curr_date]["priority"]
             assignee = issue_states[curr_date]["assignee"]
+            is_assigned = issue_states[curr_date]["is_assigned"]
             issuetype = issue_states[curr_date]["issuetype"]
             has_priority_change = (
                 issue_states[curr_date]["has_priority_change"])
@@ -177,8 +183,9 @@ class CountingProcess:
                    "end": end,
                    "is_dead": is_dead,
                    "priority": priority,
-                   "assignee": assignee,
                    "issuetype": issuetype,
+                   "assignee": assignee,
+                   "is_assigned": is_assigned,
                    "has_priority_change": has_priority_change,
                    "has_desc_change": has_desc_change,
                    "comment_count": comment_count,
@@ -214,6 +221,7 @@ class CountingProcess:
         issuekey = issue["key"]
         priority = self.get_feature("priority", issue)
         assignee = self.get_feature("assignee", issue)
+        is_assigned = self.get_feature("is_assigned", issue)
         issuetype = self.get_feature("issuetype", issue)
         desc = self.get_feature("desc", issue)
         link_count = self.get_feature("link_count", issue)
@@ -224,6 +232,7 @@ class CountingProcess:
                  "is_dead": is_dead,
                  "priority": priority,
                  "assignee": assignee,
+                 "is_assigned": is_assigned,
                  "issuetype": issuetype,
                  "desc": desc,
                  "link_count": link_count,
@@ -254,6 +263,9 @@ class CountingProcess:
                 if item["field"] == "assignee":
                     self.append_state_at_feature_change(
                         "assignee", issue, item, date, issue_states,
+                        issue_dates)
+                    self.append_state_at_feature_change(
+                        "is_assigned", issue, item, date, issue_states,
                         issue_dates)
                 if item["field"] == "issuetype":
                     self.append_state_at_feature_change(
@@ -457,7 +469,8 @@ class CountingProcess:
                 issue_states[date]["assignee_workload"] = None
 
     # TODO: This should be split into two functions?
-    def add_count_features(self, issue, issue_states, issue_dates):
+    def add_count_features(self, issue, issue_states, issue_dates,
+                           count=False):
         """ Goes through the issue states and add count features.
 
         Args:
@@ -487,11 +500,20 @@ class CountingProcess:
                 assignee_workload = issue_states[date]["assignee_workload"]
 
             if issue_states[date].get("previous_priority"):
-                has_priority_change = 1
+                if count:
+                    has_priority_change += 1
+                else:
+                    has_priority_change = 1
             if issue_states[date].get("previous_desc"):
-                has_desc_change = 1
+                if count:
+                    has_desc_change += 1
+                else:
+                    has_desc_change = 1
             if issue_states[date].get("previous_fix_count"):
-                has_fix_change = 1
+                if count:
+                    has_fix_change += 1
+                else:
+                    has_fix_change = 1
             issue_states[date]["has_priority_change"] = has_priority_change
             issue_states[date]["has_desc_change"] = has_desc_change
             issue_states[date]["has_fix_change"] = has_fix_change
@@ -529,6 +551,20 @@ class CountingProcess:
             else:
                 state = self.infer_state(date, issue_states, issue_dates)
                 state["previous_assignee"] = previous_assignee
+                bisect.insort(issue_dates, date)
+                issue_states[date] = state
+
+        elif feature == "is_assigned":
+            if item["from"] is None:
+                previous_is_assigned = 0
+            else:
+                previous_is_assigned = 1
+            if date in issue_dates:
+                issue_states[date]["previous_is_assigned"] = (
+                    previous_is_assigned)
+            else:
+                state = self.infer_state(date, issue_states, issue_dates)
+                state["previous_is_assigned"] = previous_is_assigned
                 bisect.insort(issue_dates, date)
                 issue_states[date] = state
 
@@ -674,6 +710,11 @@ class CountingProcess:
         else:
             assignee = reference_state["previous_assignee"]
 
+        if reference_state.get("previous_is_assigned") is None:
+            is_assigned = reference_state["is_assigned"]
+        else:
+            is_assigned = reference_state["previous_is_assigned"]
+
         if reference_state.get("previous_issuetype") is None:
             issuetype = reference_state["issuetype"]
         else:
@@ -703,6 +744,7 @@ class CountingProcess:
                  "is_dead": is_dead,
                  "priority": priority,
                  "assignee": assignee,
+                 "is_assigned": is_assigned,
                  "issuetype": issuetype,
                  "desc": desc,
                  "link_count": link_count,
@@ -735,6 +777,13 @@ class CountingProcess:
             else:
                 assignee = "unassigned"
             return assignee
+
+        elif feature == "is_assigned":
+            if issue["fields"]["assignee"]:
+                is_assigned = 1
+            else:
+                is_assigned = 0
+            return is_assigned
 
         elif feature == "issuetype":
             if issue["fields"]["issuetype"].get("id"):
