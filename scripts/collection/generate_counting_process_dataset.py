@@ -66,7 +66,7 @@ class CountingProcess:
         """
 
         rows = []
-        for filename in os.listdir(input_paths["issues"]):
+        for filename in sorted(os.listdir(input_paths["issues"])):
             issue_path = os.path.join(input_paths["issues"], filename)
             issue_dates, issue_states = self.generate_issue_states(
                 issue_path, reputations, workloads)
@@ -136,12 +136,10 @@ class CountingProcess:
         self.add_comment_features(issue, issue_states, issue_dates)
         if workloads:
             self.add_assignee_workload_feature(
-                issue, issue_states, issue_dates, workloads, creation_date,
-                resolution_date)
+                issue, issue_states, issue_dates, workloads)
         if reputations:
             self.add_reporter_rep_feature(
-                issue, issue_states, issue_dates, reputations, creation_date,
-                resolution_date)
+                issue, issue_states, issue_dates, reputations)
         if reputations and workloads:
             self.add_count_features(
                 issue, issue_states, issue_dates, count=True)
@@ -358,7 +356,7 @@ class CountingProcess:
                 issue_states[date] = state
 
     def add_reporter_rep_feature(self, issue, issue_states, issue_dates,
-                                 reputations, creation_date, resolution_date):
+                                 reputations):
         """ Adds the cross issue features to the issue_states
 
         Args:
@@ -368,12 +366,11 @@ class CountingProcess:
             issue_dates: Dates of interest, on which an issue changes its
                          state.
             reputations:
-            creation_date:
-            resolution_date:
         """
         reporter = issue["fields"]["creator"]["key"]
         reputation_dates = reputations[reporter]["reputation_dates"]
         reputation_timeline = reputations[reporter]["reputation_timeline"]
+        creation_date = parse(issue["fields"]["created"]).date()
 
         # Get the starting date for the issue
         idx = bisect.bisect(reputation_dates, creation_date) - 1
@@ -392,8 +389,7 @@ class CountingProcess:
             idx += 1
 
     def add_assignee_workload_feature(self, issue, issue_states, issue_dates,
-                                      workloads, creation_date,
-                                      resolution_date):
+                                      workloads):
         """ Adds the assignee_workload feature to the issue states
 
         Args:
@@ -403,8 +399,6 @@ class CountingProcess:
             issue_dates: Dates of interest, on which an issue changes its
                          state.
             reputations:
-            creation_date:
-            resolution_date:
         """
         # duplicate code
         if not issue_dates:
