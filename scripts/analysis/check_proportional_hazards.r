@@ -8,9 +8,6 @@ issues = read.csv("dataset/hbase_features_imputed.csv", header = TRUE, sep="\t")
 issues$priority <- factor(issues$priority, levels=c(3,1,2,4,5))
 issues$issuetype <- factor(issues$issuetype, levels=c(1,2,3,4,5,6,7))
 issues$is_assigned <- factor(issues$is_assigned)
-# issues$has_priority_change <- factor(issues$has_priority_change)
-# issues$has_desc_change <- factor(issues$has_desc_change)
-# issues$has_fix_change <- factor(issues$has_fix_change)
 
 attach(issues)
 
@@ -20,11 +17,11 @@ units(end) <- 'Day'
 
 S <- Surv(start, end, is_dead)
 
-feature_set <- 'partial'
+feature_set <- 'full'
 if (feature_set == 'full') {
     f <- cph(S ~ priority + issuetype + is_assigned + rcs(comment_count, 4) + rcs(link_count, 4) +
          rcs(affect_count, 4) + rcs(fix_count, 4) + has_priority_change + 
-         has_desc_change + rcs(has_fix_change, 4) + rcs(reporter_rep,4) + rcs(assignee_workload,4),
+         has_desc_change + has_fix_change + rcs(reporter_rep,4) + rcs(assignee_workload,4),
          x=TRUE, y=TRUE)
 } else if (feature_set == 'partial') {
     f <- cph(S ~ priority + rcs(link_count, 4) +

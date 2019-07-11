@@ -28,7 +28,6 @@ import pandas as pd
 from dateutil.parser import parse
 from copy import deepcopy
 from datetime import datetime, timezone
-import extract_cross_issue_data
 
 
 def main():
@@ -69,7 +68,7 @@ class CountingProcess:
         for filename in sorted(os.listdir(input_paths["issues"])):
             issue_path = os.path.join(input_paths["issues"], filename)
             issue_dates, issue_states = self.generate_issue_states(
-                issue_path, reputations, workloads)
+                issue_path, reputations, workloads, survival_threshold=50)
             issue_rows = self.generate_counting_process_rows(
                 issue_dates, issue_states)
             rows.extend(issue_rows)
