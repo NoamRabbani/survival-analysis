@@ -68,7 +68,7 @@ class CountingProcess:
         for filename in sorted(os.listdir(input_paths["issues"])):
             issue_path = os.path.join(input_paths["issues"], filename)
             issue_dates, issue_states = self.generate_issue_states(
-                issue_path, reputations, workloads, survival_threshold=50)
+                issue_path, reputations, workloads)
             issue_rows = self.generate_counting_process_rows(
                 issue_dates, issue_states)
             rows.extend(issue_rows)
@@ -95,7 +95,7 @@ class CountingProcess:
         df.to_csv(output_paths["hbase_raw"], sep="\t", index=False)
 
     def generate_issue_states(self, issue_path, reputations=None,
-                              workloads=None, survival_threshold=None):
+                              workloads=None):
         """ Generates a history of the states of an issue.
 
         Args:
@@ -110,26 +110,20 @@ class CountingProcess:
             issue = json.load(f)
 
         creation_date = parse(issue["fields"]["created"]).date()
-        if issue["fields"]["resolutiondate"] is None:
-            resolution_date = datetime.now(timezone.utc).date()
-        else:
-            resolution_date = parse(issue["fields"]["resolutiondate"]).date()
+        resolution_date = self.get_resolution_date(issue)
 
         if creation_date == resolution_date:
             logging.info("Filtered out {} because resolution date is equal to "
                          "creation date".format(issue["key"]))
             return [], {}
 
-        if survival_threshold:
-            if (resolution_date - creation_date).days > survival_threshold:
-                return [], {}
-
         issue_dates = []
         issue_states = {}
         self.append_state_at_current_time(issue, issue_states, issue_dates)
         self.append_states_from_changelog(issue, issue_states, issue_dates)
         self.append_state_at_creation(issue, issue_states, issue_dates)
-        self.append_state_at_resolution(issue, issue_states, issue_dates)
+        self.append_state_at_resolution(
+            issue, issue_states, issue_dates, resolution_date)
 
         # Order of these functions matters.
         self.add_comment_features(issue, issue_states, issue_dates)
@@ -305,7 +299,8 @@ class CountingProcess:
             bisect.insort(issue_dates, date)
             issue_states[date] = state
 
-    def append_state_at_resolution(self, issue, issue_states, issue_dates):
+    def append_state_at_resolution(self, issue, issue_states, issue_dates,
+                                   resolution_date):
         """ Appends the state of an issue at its resolution time.
 
         Args:
@@ -318,7 +313,6 @@ class CountingProcess:
         if issue["fields"]["resolutiondate"] is None:
             return
         else:
-            resolution_date = parse(issue["fields"]["resolutiondate"]).date()
             is_dead = 1
             if resolution_date in issue_dates:
                 issue_states[resolution_date]["is_dead"] = is_dead
@@ -816,6 +810,25 @@ class CountingProcess:
 
         else:
             raise ValueError()
+
+    def get_resolution_date(self, issue):
+        """ Gets the date of the first resolution of an issue
+
+        Args:
+            issue: A dict containing an issue's data
+        Returns:
+            resolution_date: Date containing the resolution_date
+        """
+        if issue["fields"]["resolutiondate"] is None:
+            resolution_date = datetime.now(timezone.utc).date()
+            return resolution_date
+        else:
+            for change in issue["changelog"]["histories"]:
+                date = parse(change["created"]).date()
+                for item in change["items"]:
+                    if item["field"] == "resolution":
+                        resolution_date = date
+                        return resolution_date
 
 
 if __name__ == "__main__":

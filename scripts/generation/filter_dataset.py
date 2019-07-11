@@ -31,13 +31,15 @@ from datetime import datetime, timezone
 def main():
     dataset_input_path = "./dataset/hbase_features_raw.csv"
     dataset_output_path = "./dataset/hbase_features_filtered.csv"
+    df = pd.read_csv(dataset_input_path, sep='\t')
+    initial_row_count = df.shape[0]
 
     f = Filter()
-    df = pd.read_csv(dataset_input_path, sep='\t')
-    df = f.map_df(df)
-    df, discarded_rows = f.reduce_df(df)
-    print("Filtered {} rows".format(discarded_rows))
+    df = f.filter_out_issues(df, "comment_count", 30)
+    df = f.filter_out_issues(df, "end", 100)
 
+    final_row_count = df.shape[0]
+    print("Filtered out {} rows".format(initial_row_count-final_row_count))
     df.to_csv(dataset_output_path, sep='\t', index=False)
 
 
@@ -45,25 +47,7 @@ class Filter:
     """ Handles filtering of raw CSV dataset containing JIRA issues.
     """
 
-    def map_df(self, df):
-        """ Maps features in the dataset from one value to another
-
-        Args:
-            df: Dataframe issues as rows and features as columns
-        Returns:
-            df: Mapped dataframe.
-        """
-
-        # Group sparse issuetype categories ( < 1%)
-        df.loc[df['issuetype'] == 13, 'issuetype'] = 5
-        df.loc[df['issuetype'] == 14, 'issuetype'] = 5
-
-        # Multiply reporter_rep by 100
-        df['reporter_rep'] *= 100
-
-        return df
-
-    def reduce_df(self, df):
+    def filter_out_issues(self, df, feature, threshold):
         """ Reduce rows in the dataset
 
         Args:
@@ -71,11 +55,11 @@ class Filter:
         Returns:
             df: Reduced dataframe.
         """
-        initial_len = len(df)
 
-        discarded_rows = initial_len - len(df)
+        issues = set(df.loc[df[feature] > threshold]["issuekey"].values)
+        df = df[~df['issuekey'].isin(issues)]
 
-        return df, discarded_rows
+        return df
 
 
 if __name__ == '__main__':
