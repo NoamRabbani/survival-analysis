@@ -114,7 +114,8 @@ class CountingProcess:
         resolution_date = self.get_resolution_date(issue)
 
         if creation_date == resolution_date:
-            logging.info("{}, creation_date == resolution_date".format(issue["key"]))
+            logging.info(
+                "{}, creation_date == resolution_date".format(issue["key"]))
             return [], {}
 
         issue_dates = []
