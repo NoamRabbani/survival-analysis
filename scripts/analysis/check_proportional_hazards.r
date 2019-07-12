@@ -5,8 +5,8 @@ require("rms")
 issues = read.csv("dataset/hbase_features_imputed.csv", header = TRUE, sep="\t")
 
 # transform columns into factors with the modes as first value
-issues$priority <- factor(issues$priority, levels=c(3,1,2,4,5))
-issues$issuetype <- factor(issues$issuetype, levels=c(1,2,3,4,5,6,7))
+issues$priority <- factor(issues$priority)
+issues$issuetype <- factor(issues$issuetype)
 issues$is_assigned <- factor(issues$is_assigned)
 issues$comment_count <- as.numeric(issues$comment_count)
 issues$link_count <- as.numeric(issues$link_count)

@@ -29,34 +29,59 @@ from datetime import datetime, timezone
 
 
 def main():
-    dataset_input_path = "./dataset/hbase_features_raw.csv"
-    dataset_output_path = "./dataset/hbase_features_filtered.csv"
-    df = pd.read_csv(dataset_input_path, sep='\t')
-    initial_row_count = df.shape[0]
+    input_paths = {"raw_dataset": "./dataset/hbase_features_raw.csv",
+                   "which_influence": "./which_influence.csv"}  # noqa
+    output_paths = {"filtered_dataset": "./dataset/hbase_features_filtered.csv"}  # noqa
+
+    df = pd.read_csv(input_paths["raw_dataset"], sep='\t')
+    initial_issue_count = df["issuekey"].nunique()
 
     f = Filter()
-    df = f.filter_out_issues(df, "comment_count", 30)
-    df = f.filter_out_issues(df, "end", 100)
+    # df = f.filter_which_influence(df, input_paths["which_influence"])
+    # df = f.filter_feature(df, "end", 365)
 
-    final_row_count = df.shape[0]
-    print("Filtered out {} rows".format(initial_row_count-final_row_count))
-    df.to_csv(dataset_output_path, sep='\t', index=False)
+    final_issue_count = df["issuekey"].nunique()
+    delta_issue_count = initial_issue_count-final_issue_count
+    print("Filtered {} out of {} issues ({:.2f}%)".format(
+        delta_issue_count, initial_issue_count,
+        delta_issue_count/initial_issue_count*100))
+    df.to_csv(output_paths["filtered_dataset"], sep='\t', index=False)
 
 
 class Filter:
     """ Handles filtering of raw CSV dataset containing JIRA issues.
     """
 
-    def filter_out_issues(self, df, feature, threshold):
-        """ Reduce rows in the dataset
+    def filter_feature(self, df, feature, threshold):
+        """ Removes issues that contains a feature above a threshold
 
         Args:
             df: Dataframe issues as rows and features as columns
+            feature: String of the feature to consider
+            threshold: Cutoff threshold
         Returns:
-            df: Reduced dataframe.
+            df: Filtered dataframe.
         """
-
         issues = set(df.loc[df[feature] > threshold]["issuekey"].values)
+        df = df[~df['issuekey'].isin(issues)]
+
+        return df
+
+    def filter_which_influence(self, df, which_influence_path):
+        """ Removes issues overly influential observations
+
+        Based on the output of which.influence in R
+
+        Args:
+            df: Dataframe issues as rows and features as columns
+            which_influence_path: Path of df containing overly influential
+                                     observations
+        Returns:
+            df: Filtered dataframe.
+        """
+        which_influence_df = pd.read_csv(which_influence_path)
+        rows = list(set(which_influence_df.iloc[:, 0]))
+        issues = set(df.iloc[rows, 0])
         df = df[~df['issuekey'].isin(issues)]
 
         return df

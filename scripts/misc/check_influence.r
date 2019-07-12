@@ -34,5 +34,6 @@ f <- cph(S ~ priority + issuetype + is_assigned + rcs(comment_count, 4) + rcs(li
 
 w <- which.influence(f, cutoff=.05)
 inf <- show.influence(w, issues)
+inf
 
-write.csv(inf, "overly_influential.csv")
+write.csv(inf, "which_influence.csv", quote=FALSE)

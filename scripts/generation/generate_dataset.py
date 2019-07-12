@@ -36,6 +36,7 @@ def main():
                    "workloads": "./cross_issue_data/workload_timelines.pickle"}  # noqa
     output_paths = {"hbase_raw": "./dataset/hbase_features_raw.csv"}
     logging.basicConfig(level=logging.INFO, filename="log", filemode='w')
+    logging.info("issuekey, reason")
 
     with open(input_paths["reputations"], 'rb') as fp:
         reputations = pickle.load(fp)
@@ -113,8 +114,7 @@ class CountingProcess:
         resolution_date = self.get_resolution_date(issue)
 
         if creation_date == resolution_date:
-            logging.info("Filtered out {} because resolution date is equal to "
-                         "creation date".format(issue["key"]))
+            logging.info("{}, creation_date == resolution_date".format(issue["key"]))
             return [], {}
 
         issue_dates = []
