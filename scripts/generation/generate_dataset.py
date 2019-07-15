@@ -38,6 +38,9 @@ def main():
     logging.basicConfig(level=logging.INFO, filename="log", filemode='w')
     logging.info("issuekey, reason")
 
+    reputations = None
+    workloads = None
+    # Comment next four lines to ignore cross-issue features
     with open(input_paths["reputations"], 'rb') as fp:
         reputations = pickle.load(fp)
     with open(input_paths["workloads"], 'rb') as fp:
@@ -52,8 +55,8 @@ class CountingProcess:
     """ Generates a counting process dataset from JSON issue data.
     """
 
-    def generate_dataset(self, input_paths, output_paths, reputations,
-                         workloads):
+    def generate_dataset(self, input_paths, output_paths, reputations=None,
+                         workloads=None):
         """ Generates the dataset in the counting process format
 
         Args:
@@ -64,14 +67,13 @@ class CountingProcess:
             workloads: Dictionary containing the workloads of each user and
                          how it changes over time.
         """
-
         rows = []
         for filename in sorted(os.listdir(input_paths["issues"])):
             issue_path = os.path.join(input_paths["issues"], filename)
-            issue_dates, issue_states = self.generate_issue_states(
+            issue_states, issue_dates = self.generate_issue_states(
                 issue_path, reputations, workloads)
             issue_rows = self.generate_counting_process_rows(
-                issue_dates, issue_states)
+                issue_states, issue_dates, reputations, workloads)
             rows.extend(issue_rows)
 
         columns = ["issuekey",
@@ -89,23 +91,29 @@ class CountingProcess:
                    "has_priority_change",
                    "has_desc_change",
                    "has_fix_change",
-                   "reporter_rep",
-                   "assignee_workload"
                    ]
+        if reputations:
+            columns.append("reporter_rep")
+        if workloads:
+            columns.append("assignee_workload")
         df = pd.DataFrame(rows, columns=columns)
         df.to_csv(output_paths["hbase_raw"], sep="\t", index=False)
 
-    def generate_issue_states(self, issue_path, reputations=None,
-                              workloads=None):
+    def generate_issue_states(self, issue_path, reputations,
+                              workloads):
         """ Generates a history of the states of an issue.
 
         Args:
             issue_path: Path to the JSON file containing the issue data.
-            input_paths: Dictionary containing paths of input files.
-            reputations:
-            workloads:
+            reputations: Dictionary containing the reputation of each user and
+                         how it changes over time.
+            workloads: Dictionary containing the workloads of each user and
+                         how it changes over time.
         Returns:
-            rows: list of rows containing an issues features in couting process
+            issue_states: Dict containg the states of the issue at the dates
+                          of interest.
+            issue_dates: Dates of interest, on which an issue changes its
+                         state.
         """
         with open(issue_path, "r") as f:
             issue = json.load(f)
@@ -114,7 +122,8 @@ class CountingProcess:
         resolution_date = self.get_resolution_date(issue)
 
         if creation_date == resolution_date:
-            logging.info("{}, creation_date == resolution_date".format(issue["key"]))
+            logging.info(
+                "{}, creation_date == resolution_date".format(issue["key"]))
             return [], {}
 
         issue_dates = []
@@ -127,19 +136,34 @@ class CountingProcess:
 
         # Order of these functions matters.
         self.add_comment_features(issue, issue_states, issue_dates)
-        if workloads:
-            self.add_assignee_workload_feature(
-                issue, issue_states, issue_dates, workloads)
         if reputations:
             self.add_reporter_rep_feature(
                 issue, issue_states, issue_dates, reputations)
-        if reputations and workloads:
-            self.add_count_features(
-                issue, issue_states, issue_dates, count=True)
+        if workloads:
+            self.add_assignee_workload_feature(
+                issue, issue_states, issue_dates, workloads)
+        self.level_issue_states(issue, issue_states,
+                                issue_dates, reputations, workloads)
+        self.add_count_features(issue, issue_states, issue_dates, count=True)
 
-        return issue_dates, issue_states
+        return issue_states, issue_dates
 
-    def generate_counting_process_rows(self, issue_dates, issue_states):
+    def generate_counting_process_rows(self, issue_states, issue_dates,
+                                       reputations, workloads):
+        """ Generates the counting process rows for the final dataset.
+
+        Args:
+            issue_states: Dict containg the states of the issue at the dates
+                          of interest.
+            issue_dates: Dates of interest, on which an issue changes its
+                         state.
+            reputations: Dictionary containing the reputation of each user and
+                         how it changes over time.
+            workloads: Dictionary containing the workloads of each user and
+                         how it changes over time.
+        Returns:
+            rows: list of rows containing an issues features in couting process
+        """
         rows = []
 
         if not issue_dates or not issue_states:
@@ -167,8 +191,10 @@ class CountingProcess:
                 issue_states[curr_date]["affect_count"])
             fix_count = issue_states[curr_date]["fix_count"]
             has_fix_change = issue_states[curr_date]["has_fix_change"]
-            reporter_rep = issue_states[curr_date]["reporter_rep"]
-            assignee_workload = issue_states[curr_date]["assignee_workload"]
+            if reputations:
+                reporter_rep = issue_states[curr_date]["reporter_rep"]
+            if workloads:
+                assignee_workload = issue_states[curr_date]["assignee_workload"]
             row = {"issuekey": issuekey,
                    "start": start,
                    "end": end,
@@ -184,9 +210,11 @@ class CountingProcess:
                    "affect_count": affect_count,
                    "fix_count": fix_count,
                    "has_fix_change": has_fix_change,
-                   "reporter_rep": reporter_rep,
-                   "assignee_workload": assignee_workload,
                    }
+            if reputations:
+                row["reporter_rep"] = reporter_rep
+            if workloads:
+                row["assignee_workload"] = assignee_workload
             rows.append(row)
             if is_dead:
                 break
@@ -358,7 +386,8 @@ class CountingProcess:
                           of interest
             issue_dates: Dates of interest, on which an issue changes its
                          state.
-            reputations:
+            reputations: Dictionary containing the reputation of each user and
+                         how it changes over time.
         """
         reporter = issue["fields"]["creator"]["key"]
         reputation_dates = reputations[reporter]["reputation_dates"]
@@ -391,7 +420,8 @@ class CountingProcess:
                           of interest
             issue_dates: Dates of interest, on which an issue changes its
                          state.
-            reputations:
+            workloads: Dictionary containing the workloads of each user and
+                         how it changes over time.
         """
         # duplicate code
         if not issue_dates:
@@ -455,7 +485,44 @@ class CountingProcess:
             if issue_states[date]["assignee"] == "unassigned":
                 issue_states[date]["assignee_workload"] = None
 
-    # TODO: This should be split into two functions?
+    def level_issue_states(self, issue, issue_states, issue_dates,
+                           reputations, workloads):
+        """ Goes through the issue states to set the missing feature values.
+
+        Args:
+            issue: Dict that contains the issue's data.
+            issue_states: Dict containg the states of the issue at the dates
+                          of interest.
+            reputations: Dictionary containing the reputation of each user and
+                         how it changes over time.
+            workloads: Dictionary containing the workloads of each user and
+                         how it changes over time.
+        """
+        comment_count = 0
+        first_date = issue_dates[0]
+        if reputations:
+            reporter_rep = issue_states[first_date]["reporter_rep"]
+        if workloads:
+            assignee_workload = issue_states[first_date]["assignee_workload"]
+
+        for date in issue_dates:
+            if issue_states[date].get("comment_count") is None:
+                issue_states[date]["comment_count"] = comment_count
+            else:
+                comment_count = issue_states[date]["comment_count"]
+
+            if reputations:
+                if issue_states[date].get("reporter_rep") is None:
+                    issue_states[date]["reporter_rep"] = reporter_rep
+                else:
+                    reporter_rep = issue_states[date]["reporter_rep"]
+
+            if workloads:
+                if issue_states[date].get("assignee_workload") is None:
+                    issue_states[date]["assignee_workload"] = assignee_workload
+                else:
+                    assignee_workload = issue_states[date]["assignee_workload"]
+
     def add_count_features(self, issue, issue_states, issue_dates,
                            count=False):
         """ Goes through the issue states and add count features.
@@ -464,39 +531,26 @@ class CountingProcess:
             issue: Dict that contains the issue's data.
             issue_states: Dict containg the states of the issue at the dates
                           of interest.
+            issue_dates: Dates of interest, on which an issue changes its
+                         state.
+            count: Boolean that determines whether the process features should
+                   be bools or counts.
         """
-        comment_count = 0
-        reporter_rep = issue_states[issue_dates[0]]["reporter_rep"]
-        assignee_workload = issue_states[issue_dates[0]]["assignee_workload"]
-
         has_priority_change = 0
         has_desc_change = 0
         has_fix_change = 0
         for date in issue_dates:
-            if issue_states[date].get("comment_count") is None:
-                issue_states[date]["comment_count"] = comment_count
-            else:
-                comment_count = issue_states[date]["comment_count"]
-            if issue_states[date].get("reporter_rep") is None:
-                issue_states[date]["reporter_rep"] = reporter_rep
-            else:
-                reporter_rep = issue_states[date]["reporter_rep"]
-            if issue_states[date].get("assignee_workload") is None:
-                issue_states[date]["assignee_workload"] = assignee_workload
-            else:
-                assignee_workload = issue_states[date]["assignee_workload"]
-
-            if issue_states[date].get("previous_priority"):
+            if issue_states[date].get("previous_priority") is not None:
                 if count:
                     has_priority_change += 1
                 else:
                     has_priority_change = 1
-            if issue_states[date].get("previous_desc"):
+            if issue_states[date].get("previous_desc") is not None:
                 if count:
                     has_desc_change += 1
                 else:
                     has_desc_change = 1
-            if issue_states[date].get("previous_fix_count"):
+            if issue_states[date].get("previous_fix_count") is not None:
                 if count:
                     has_fix_change += 1
                 else:
