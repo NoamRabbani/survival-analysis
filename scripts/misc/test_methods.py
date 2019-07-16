@@ -38,9 +38,12 @@ class Caller:
             reputations = pickle.load(fp)
         with open(input_paths["workloads"], 'rb') as fp:
             workloads = pickle.load(fp)
-        issue_path = input_paths["issues"] + "HBASE-10051"
+        first_resolution = False
+        increment_resolution_date = True
+        issue_path = input_paths["issues"] + issuekey
         issue_states, issue_dates = cp.generate_issue_states(
-            issue_path, reputations, workloads)
+            issue_path, first_resolution, increment_resolution_date,
+            reputations, workloads)
         pass
 
 

@@ -270,13 +270,18 @@ class CrossIssueDataProcessor():
 
     def generate_assignee_worklogs(self, input_paths):
         worklogs = {}
+
         cp = generate_dataset.CountingProcess()
         for filename in os.listdir(input_paths["issues"]):
             issue_path = os.path.join(input_paths["issues"], filename)
+            # issue_path = os.path.join(input_paths["issues"], "HBASE-12277")
             with open(issue_path, "r") as f:
                 issue = json.load(f)
+            first_resolution = False
+            increment_resolution_date = True
             issue_states, issue_dates = cp.generate_issue_states(
-                issue_path, None, None)
+                issue_path, first_resolution, increment_resolution_date, None,
+                None)
 
             if not issue_dates:
                 continue

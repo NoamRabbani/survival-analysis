@@ -37,44 +37,45 @@ def main():
     logging.basicConfig(level=logging.INFO, filename="log", filemode='w')
     logging.info("issuekey, reason")
 
-    reputations = None
-    workloads = None
-    # Comment next four lines to ignore cross-issue features
     with open(input_paths["reputations"], 'rb') as fp:
         reputations = pickle.load(fp)
     with open(input_paths["workloads"], 'rb') as fp:
         workloads = pickle.load(fp)
 
     cp = CountingProcess()
-    cp.generate_dataset(input_paths, output_paths,
-                        reputations, workloads)
+    first_resolution = False
+    increment_resolution_date = True
+    cp.generate_dataset(input_paths, output_paths, first_resolution,
+                        increment_resolution_date, reputations, workloads)
 
 
 class CountingProcess:
     """ Generates a counting process dataset from JSON issue data.
     """
 
-    def generate_dataset(self, input_paths, output_paths, reputations=None,
+    def generate_dataset(self, input_paths, output_paths, first_resolution,
+                         increment_resolution_date, reputations=None,
                          workloads=None):
         """ Generates the dataset in the counting process format
 
         Args:
             input_paths: Dictionary containing paths of input files.
             output_path: Dictionary containing paths of output files
+            first_resolution: Boolean indicating if we should use the first
+                              time an issue is resolved
+            increment_resolution_date: Boolean indicating if the resolution
+                            date should be incremented by one day
             reputations: Dictionary containing the reputation of each user and
                          how it changes over time.
             workloads: Dictionary containing the workloads of each user and
                          how it changes over time.
         """
-        # issue_path = input_paths["issues"] + "HBASE-10051"
-        # issue_states, issue_dates = self.generate_issue_states(
-        #     issue_path, reputations, workloads)
-
         rows = []
         for filename in sorted(os.listdir(input_paths["issues"])):
             issue_path = os.path.join(input_paths["issues"], filename)
             issue_states, issue_dates = self.generate_issue_states(
-                issue_path, reputations, workloads)
+                issue_path, first_resolution, increment_resolution_date,
+                reputations, workloads)
             issue_rows = self.generate_counting_process_rows(
                 issue_states, issue_dates, reputations, workloads)
             rows.extend(issue_rows)
@@ -102,7 +103,8 @@ class CountingProcess:
         df = pd.DataFrame(rows, columns=columns)
         df.to_csv(output_paths["hbase_raw"], sep="\t", index=False)
 
-    def generate_issue_states(self, issue_path, reputations,
+    def generate_issue_states(self, issue_path, first_resolution,
+                              increment_resolution_date, reputations,
                               workloads):
         """ Generates a history of the states of an issue.
 
@@ -112,6 +114,8 @@ class CountingProcess:
                          how it changes over time.
             workloads: Dictionary containing the workloads of each user and
                          how it changes over time.
+            increment_resolution_date: Boolean indicating if the resolution
+                                       date should be incremented by one day
         Returns:
             issue_states: Dict containg the states of the issue at the dates
                           of interest.
@@ -122,7 +126,8 @@ class CountingProcess:
             issue = json.load(f)
 
         creation_date = parse(issue["fields"]["created"]).date()
-        resolution_date = self.get_resolution_date(issue)
+        resolution_date = self.get_resolution_date(
+            issue, first_resolution, increment_resolution_date)
 
         if creation_date == resolution_date:
             logging.info(
@@ -873,11 +878,16 @@ class CountingProcess:
         else:
             raise ValueError()
 
-    def get_resolution_date(self, issue):
+    def get_resolution_date(self, issue, first_resolution,
+                            increment_resolution_date):
         """ Gets the date of the first resolution of an issue
 
         Args:
             issue: A dict containing an issue's data
+            first_resolution: Boolean indicating wether we should consider the
+                              first resolution_date or the latest one
+            increment_resolution_date: Boolean indicating if the resolution
+                                       date should be incremented by one day
         Returns:
             resolution_date: Date containing the resolution_date
         """
@@ -885,12 +895,22 @@ class CountingProcess:
             resolution_date = datetime.now(timezone.utc).date()
             return resolution_date
         else:
-            for change in issue["changelog"]["histories"]:
-                date = parse(change["created"]).date()
-                for item in change["items"]:
-                    if item["field"] == "resolution":
-                        resolution_date = date + timedelta(days=1)
-                        return resolution_date
+            if first_resolution:
+                for change in issue["changelog"]["histories"]:
+                    date = parse(change["created"]).date()
+                    for item in change["items"]:
+                        if item["field"] == "resolution":
+                            resolution_date = date
+                            if increment_resolution_date:
+                                resolution_date += timedelta(days=1)
+                            return resolution_date
+            else:
+                resolution_date = parse(
+                    issue["fields"]["resolutiondate"]).date()
+                if increment_resolution_date:
+                    resolution_date = (resolution_date +
+                                       timedelta(days=1))
+                return resolution_date
 
 
 if __name__ == "__main__":
