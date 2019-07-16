@@ -16,26 +16,28 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 Email: hello@noamrabbani.com
 """
 
-import os
-import json
-import datetime
-import pickle
-from dateutil.parser import parse
-import bisect
-import generate_counting_process_dataset
+
 from copy import deepcopy
+import bisect
+from dateutil.parser import parse
+import pickle
+import datetime
+import json
+import os
+import sys
+sys.path.insert(0, "./scripts/generation/")
+import generate_dataset  # noqa
 
 
 def main():
 
     input_paths = {"issues": "./issues_hbase/"}
     output_paths = {"reputations": "./cross_issue_data/reputation_timelines.pickle",  # noqa
-                   "workloads": "./cross_issue_data/workload_timelines.pickle"}  # noqa
+                      "workloads": "./cross_issue_data/workload_timelines.pickle"}  # noqa
 
     cidp = CrossIssueDataProcessor()
     reputations = cidp.generate_reporter_reputations(input_paths, output_paths)
-    workloads = cidp.generate_assignee_workloads(
-        input_paths, output_paths, reputations)
+    workloads = cidp.generate_assignee_workloads(input_paths, output_paths)
 
 
 class CrossIssueDataProcessor():
@@ -101,13 +103,12 @@ class CrossIssueDataProcessor():
 
         return reputation_timelines
 
-    def generate_assignee_workloads(self, input_paths, output_paths,
-                                    reputations):
+    def generate_assignee_workloads(self, input_paths, output_paths):
         assigned_issues_timelines = {}
         unassigned_issues_timelines = {}
         workload_timelines = {}
 
-        worklogs = self.generate_assignee_worklogs(input_paths, reputations)
+        worklogs = self.generate_assignee_worklogs(input_paths)
         for assignee, worklog in worklogs.items():
             assigned_dates, issues_assigned_on, assigned_issues_timeline = (
                 self.extract_assigned_issues(assignee, worklog))
@@ -267,15 +268,15 @@ class CrossIssueDataProcessor():
 
         return worklogs
 
-    def generate_assignee_worklogs(self, input_paths, reputations):
+    def generate_assignee_worklogs(self, input_paths):
         worklogs = {}
-        cp = generate_counting_process_dataset.CountingProcess()
+        cp = generate_dataset.CountingProcess()
         for filename in os.listdir(input_paths["issues"]):
             issue_path = os.path.join(input_paths["issues"], filename)
             with open(issue_path, "r") as f:
                 issue = json.load(f)
-            issue_dates, issue_states = cp.generate_issue_states(
-                issue_path, input_paths, reputations)
+            issue_states, issue_dates = cp.generate_issue_states(
+                issue_path, None, None)
 
             if not issue_dates:
                 continue

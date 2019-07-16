@@ -20,14 +20,13 @@ Email: hello@noamrabbani.com
 import unittest
 import json
 import os
-import datetime
 import bisect
 import logging
 import pickle
 import pandas as pd
 from dateutil.parser import parse
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 def main():
@@ -67,6 +66,10 @@ class CountingProcess:
             workloads: Dictionary containing the workloads of each user and
                          how it changes over time.
         """
+        # issue_path = input_paths["issues"] + "HBASE-10051"
+        # issue_states, issue_dates = self.generate_issue_states(
+        #     issue_path, reputations, workloads)
+
         rows = []
         for filename in sorted(os.listdir(input_paths["issues"])):
             issue_path = os.path.join(input_paths["issues"], filename)
@@ -194,7 +197,8 @@ class CountingProcess:
             if reputations:
                 reporter_rep = issue_states[curr_date]["reporter_rep"]
             if workloads:
-                assignee_workload = issue_states[curr_date]["assignee_workload"]
+                assignee_workload = (
+                    issue_states[curr_date]["assignee_workload"])
             row = {"issuekey": issuekey,
                    "start": start,
                    "end": end,
@@ -401,6 +405,8 @@ class CountingProcess:
         while date <= issue_dates[-1] and idx < len(reputation_dates):
             date = reputation_dates[idx]
             reporter_rep = reputation_timeline[date]
+            if date < issue_dates[0]:
+                date = issue_dates[0]
             if date in issue_dates:
                 issue_states[date]["reporter_rep"] = reporter_rep
             else:
@@ -469,6 +475,8 @@ class CountingProcess:
                    idx < len(workload_dates)):
                 workload_date = workload_dates[idx]
                 assignee_workload = workload_timeline[workload_date]
+                if workload_date < issue_dates[0]:
+                    workload_date = issue_dates[0]
                 if workload_date in issue_dates:
                     issue_states[workload_date]["assignee_workload"] = (
                         assignee_workload)
@@ -881,7 +889,7 @@ class CountingProcess:
                 date = parse(change["created"]).date()
                 for item in change["items"]:
                     if item["field"] == "resolution":
-                        resolution_date = date
+                        resolution_date = date + timedelta(days=1)
                         return resolution_date
 
 
