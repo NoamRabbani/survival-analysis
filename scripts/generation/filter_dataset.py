@@ -37,8 +37,8 @@ def main():
     initial_issue_count = df["issuekey"].nunique()
 
     f = Filter()
-    # df = f.filter_which_influence(df, input_paths["which_influence"])
-    # df = f.filter_feature(df, "end", 365)
+    df = f.filter_which_influence(df, input_paths["which_influence"])
+    # df = f.filter_feature(df, "end", 200)
 
     final_issue_count = df["issuekey"].nunique()
     delta_issue_count = initial_issue_count-final_issue_count

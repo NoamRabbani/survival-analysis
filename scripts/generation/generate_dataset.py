@@ -37,14 +37,21 @@ def main():
     logging.basicConfig(level=logging.INFO, filename="log", filemode='w')
     logging.info("issuekey, reason")
 
-    with open(input_paths["reputations"], 'rb') as fp:
-        reputations = pickle.load(fp)
-    with open(input_paths["workloads"], 'rb') as fp:
-        workloads = pickle.load(fp)
-
     cp = CountingProcess()
+
+    include_cross_issue_features = True
     first_resolution = False
     increment_resolution_date = True
+
+    if include_cross_issue_features:
+        with open(input_paths["reputations"], 'rb') as fp:
+            reputations = pickle.load(fp)
+        with open(input_paths["workloads"], 'rb') as fp:
+            workloads = pickle.load(fp)
+    else:
+        reputations = None
+        workloads = None
+
     cp.generate_dataset(input_paths, output_paths, first_resolution,
                         increment_resolution_date, reputations, workloads)
 
@@ -81,6 +88,7 @@ class CountingProcess:
             rows.extend(issue_rows)
 
         columns = ["issuekey",
+                   "start_date",
                    "start",
                    "end",
                    "is_dead",
@@ -183,6 +191,7 @@ class CountingProcess:
         while nxt_idx < len(issue_dates):
             curr_date, nxt_date = issue_dates[curr_idx], issue_dates[nxt_idx]
             issuekey = issue_states[curr_date]["issuekey"]
+            start_date = curr_date
             start = (curr_date - creation_date).days
             end = (nxt_date - creation_date).days
             is_dead = issue_states[nxt_date]["is_dead"]
@@ -205,6 +214,7 @@ class CountingProcess:
                 assignee_workload = (
                     issue_states[curr_date]["assignee_workload"])
             row = {"issuekey": issuekey,
+                   "start_date": start_date,
                    "start": start,
                    "end": end,
                    "is_dead": is_dead,

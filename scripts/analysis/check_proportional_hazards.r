@@ -29,8 +29,8 @@ S <- Surv(start, end, is_dead)
 feature_set <- 'full'
 if (feature_set == 'full') {
     f <- cph(S ~ priority + issuetype + is_assigned + rcs(comment_count,4) + rcs(link_count, 4) +
-         rcs(affect_count, 4) + fix_count + has_priority_change + 
-         has_desc_change + has_fix_change + rcs(reporter_rep,4) + rcs(assignee_workload,4),
+         rcs(affect_count, 4) + rcs(fix_count,4) + has_priority_change + 
+         has_desc_change + rcs(has_fix_change,4) + rcs(reporter_rep,4) + rcs(assignee_workload,4),
          x=TRUE, y=TRUE)
 } else if (feature_set == 'partial') {
     f <- cph(S ~ priority + rcs(link_count, 4) +
