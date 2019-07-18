@@ -416,19 +416,22 @@ class CountingProcess:
         # Get the starting date for the issue
         idx = bisect.bisect(reputation_dates, creation_date) - 1
         date = reputation_dates[idx]
+        prev_reporter_rep = float("inf")
         # Do a pass to add reputation changes
         while date <= issue_dates[-1] and idx < len(reputation_dates):
             date = reputation_dates[idx]
             reporter_rep = reputation_timeline[date]
-            if date < issue_dates[0]:
-                date = issue_dates[0]
-            if date in issue_dates:
-                issue_states[date]["reporter_rep"] = reporter_rep
-            else:
-                state = self.infer_state(date, issue_states, issue_dates)
-                state["reporter_rep"] = reporter_rep
-                bisect.insort(issue_dates, date)
-                issue_states[date] = state
+            if abs(reporter_rep - prev_reporter_rep >= 0.01):
+                prev_reporter_rep = reporter_rep
+                if date < issue_dates[0]:
+                    date = issue_dates[0]
+                if date in issue_dates:
+                    issue_states[date]["reporter_rep"] = reporter_rep
+                else:
+                    state = self.infer_state(date, issue_states, issue_dates)
+                    state["reporter_rep"] = reporter_rep
+                    bisect.insort(issue_dates, date)
+                    issue_states[date] = state
             idx += 1
 
     def add_assignee_workload_feature(self, issue, issue_states, issue_dates,
@@ -484,23 +487,26 @@ class CountingProcess:
             unassigned_date = assignee_timeline["unassigned_date"]
             idx = bisect.bisect(workload_dates, assigned_date) - 1
             workload_date = workload_dates[idx]
+            prev_assignee_workload = float("inf")
             # Do a pass to add the assignee's workload
             while (workload_date <= issue_dates[-1] and
                    workload_date < unassigned_date and
                    idx < len(workload_dates)):
                 workload_date = workload_dates[idx]
                 assignee_workload = workload_timeline[workload_date]
-                if workload_date < issue_dates[0]:
-                    workload_date = issue_dates[0]
-                if workload_date in issue_dates:
-                    issue_states[workload_date]["assignee_workload"] = (
-                        assignee_workload)
-                else:
-                    state = self.infer_state(
-                        workload_date, issue_states, issue_dates)
-                    state["assignee_workload"] = assignee_workload
-                    bisect.insort(issue_dates, workload_date)
-                    issue_states[workload_date] = state
+                if abs(prev_assignee_workload - assignee_workload > 0):
+                    prev_assignee_workload = assignee_workload
+                    if workload_date < issue_dates[0]:
+                        workload_date = issue_dates[0]
+                    if workload_date in issue_dates:
+                        issue_states[workload_date]["assignee_workload"] = (
+                            assignee_workload)
+                    else:
+                        state = self.infer_state(
+                            workload_date, issue_states, issue_dates)
+                        state["assignee_workload"] = assignee_workload
+                        bisect.insort(issue_dates, workload_date)
+                        issue_states[workload_date] = state
                 idx += 1
 
         # do a pass to set the workload of unassigned issues to None

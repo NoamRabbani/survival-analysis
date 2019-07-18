@@ -27,7 +27,7 @@ def main():
                 "reputations": "./cross_issue_data/reputation_timelines.pickle",  # noqa
                 "workloads": "./cross_issue_data/workload_timelines.pickle"}  # noqa
     c = Caller()
-    c.call_generate_issue_states(input_paths, "HBASE-10051")
+    c.call_generate_issue_states(input_paths, "HBASE-10000")
 
 
 class Caller:
