@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 
 def main():
     input_paths = {"raw_dataset": "./dataset/hbase_features_raw.csv",
-                   "which_influence": "./which_influence.csv"}  # noqa
+                   "which_influence": "./scripts/generation/which_influence.csv"}  # noqa
     output_paths = {"filtered_dataset": "./dataset/hbase_features_filtered.csv"}  # noqa
 
     df = pd.read_csv(input_paths["raw_dataset"], sep='\t')
@@ -80,7 +80,8 @@ class Filter:
             df: Filtered dataframe.
         """
         which_influence_df = pd.read_csv(which_influence_path)
-        rows = list(set(which_influence_df.iloc[:, 0]))
+        rows = sorted(list(set(which_influence_df.iloc[:, 0])))
+        print(max(rows))
         issues = set(df.iloc[rows, 0])
         df = df[~df['issuekey'].isin(issues)]
 

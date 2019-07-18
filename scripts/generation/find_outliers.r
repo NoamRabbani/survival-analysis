@@ -2,7 +2,7 @@ require("survival")
 require("survminer")
 require("rms")
 
-issues = read.csv("dataset/hbase_features_imputed.csv", header = TRUE, sep="\t")
+issues = read.csv("dataset/hbase_features_raw.csv", header = TRUE, sep="\t")
 
 # transform columns into factors with the modes as first value
 issues$priority <- factor(issues$priority, levels=c(3,1,2,4,5))
@@ -36,4 +36,4 @@ w <- which.influence(f, cutoff=.035)
 inf <- show.influence(w, issues)
 inf
 
-write.csv(inf, "which_influence.csv", quote=FALSE)
+write.csv(inf, "./scripts/generation/which_influence.csv", quote=FALSE)
