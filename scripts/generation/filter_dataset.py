@@ -39,12 +39,14 @@ def main():
     f = Filter()
     df = f.filter_which_influence(df, input_paths["which_influence"])
     # df = f.filter_feature(df, "end", 730)
+    df = f.censor_observations(df, 365)
 
     final_issue_count = df["issuekey"].nunique()
     delta_issue_count = initial_issue_count-final_issue_count
     print("Filtered {} out of {} issues ({:.2f}%)".format(
         delta_issue_count, initial_issue_count,
         delta_issue_count/initial_issue_count*100))
+
     df.to_csv(output_paths["filtered_dataset"], sep='\t', index=False)
 
 
@@ -85,6 +87,20 @@ class Filter:
         issues = set(df.iloc[rows, 0])
         df = df[~df['issuekey'].isin(issues)]
 
+        return df
+
+    def censor_observations(self, df, days):
+        """ Right censor observations in the dataset
+
+        Removes rows where end > days
+
+        Args:
+            df: Dataframe issues as rows and features as columns
+            days: Cutoff point in days
+        Returns:
+            df: Filtered dataframe.
+        """
+        df = df.drop(df[df.end > days].index)
         return df
 
 

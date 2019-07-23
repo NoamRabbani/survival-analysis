@@ -21,35 +21,58 @@ issues$reporter_rep <- as.numeric(issues$reporter_rep)
 issues$assignee_workload <- as.numeric(issues$assignee_workload)
 
 
-issues2 <- survSplit(Surv(start, end, is_dead) ~., data=issues, cut=c(365,730,1095), episode="tgroup")
-write.csv(issues2, "./dataset/hbase_features_tgroup.csv", quote=FALSE)
+issues2 <- survSplit(Surv(start, end, is_dead) ~., data=issues, cut=c(90, 180, 270), episode="tgroup")
+# issues2 <- survSplit(Surv(start, end, is_dead) ~., data=issues, cut=c(60, 120, 180, 240, 300), episode="tgroup")
 
-# issues2$interaction_is_assigned <- issues2$is_assigned * strata(issues2$tgroup)
-issues2$interaction_comment_count <- interaction(issues2$comment_count, strata(issues2$tgroup))
+# issues2$interaction_is_assigned <- interaction(issues2$is_assigned, strat(issues2$tgroup))
+# issues2$int_comment_count <- interaction(issues2$comment_count,issues2$tgroup)
+# issues2$int_link_count <- interaction(issues2$link_count, strat(issues2$tgroup))
+# issues2 <- with((issues2), data.frame(issues2, interaction(comment_count,tgroup)))
+# colnames(issues2)[20] <- "int_comment_count"
+summary(issues2)
 
-dd <- datadist(issues); options(datadist = "dd")
+# write.csv(issues2, "./dataset/hbase_features_interactions.csv", quote=FALSE)
+
+
+dd <- datadist(issues2); options(datadist = "dd")
 units(start) <- "Day"
 units(end) <- "Day"
 
-# f <- cph(Surv(start, end, is_dead) ~ priority + comment_count * strat(issues2$tgroup),
-#         x=TRUE, y=TRUE, singular.ok=TRUE, data=issues2)
-# f
+# f <- coxph(Surv(start, end, is_dead) ~ 
+#         priority + 
+#         issuetype + 
+#         is_assigned + 
+#         rcs(comment_count,4):strata(tgroup) + 
+#         rcs(link_count, 4):strata(tgroup) +
+#         rcs(affect_count, 4) + 
+#         rcs(fix_count,4):strata(tgroup) + 
+#         has_priority_change:strata(tgroup) + 
+#         has_desc_change:strata(tgroup) + 
+#         rcs(has_fix_change,4):strata(tgroup) + 
+#         rcs(reporter_rep,4):strata(tgroup) + 
+#         rcs(assignee_workload,4):strata(tgroup),
+#         x=TRUE, y=TRUE, data=issues2)
 
-
-f <- cph(Surv(start, end, is_dead) ~ priority + issuetype + is_assigned + rcs(comment_count,4)*strat(tgroup) + rcs(link_count, 4) +
-        rcs(affect_count, 4)*strat(tgroup) + rcs(fix_count,4)*strat(tgroup) + rcs(has_priority_change,4)*strat(tgroup) + 
-        has_desc_change + rcs(has_fix_change,4)*strat(tgroup) + rcs(reporter_rep,4)*strat(tgroup) + rcs(assignee_workload,4),
+f <- cph(Surv(start, end, is_dead) ~ 
+        priority + 
+        # issuetype + 
+        is_assigned + 
+        rcs(comment_count,4)*strat(tgroup) + 
+        rcs(link_count, 4)*strat(tgroup) +
+        rcs(affect_count, 4) + 
+        rcs(fix_count,4)*strat(tgroup) + 
+        has_priority_change*strat(tgroup) + 
+        has_desc_change*strat(tgroup) + 
+        rcs(has_fix_change,4)*strat(tgroup) + 
+        rcs(reporter_rep,4)*strat(tgroup) + 
+        rcs(assignee_workload,4)*strat(tgroup),
         x=TRUE, y=TRUE, data=issues2)
-print(f, latex = TRUE, coefs = FALSE)
+
+print(f, latex = TRUE, coefs = TRUE)
 
 
 z <- predict(f, type="terms")
-f.short <- cph(Surv(start, end, is_dead) ~ z, x=TRUE, y=TRUE, data=issues2)
+f.short <- coxph(Surv(start, end, is_dead) ~ z, x=TRUE, y=TRUE, data=issues2)
 zph <- cox.zph(f.short, transform="identity")
 zph
-# issues_tgroup = survSplit(Surv(start, end, is_dead) ~ priority + issuetype + is_assigned + rcs(comment_count,4) + rcs(link_count, 4) +
-#         rcs(affect_count, 4) + rcs(fix_count,4) + has_priority_change + 
-#         has_desc_change + rcs(has_fix_change,4) + rcs(reporter_rep,4) + rcs(assignee_workload,4),
-#         data=issues, cut=c(1000), episode="tgroup", id="issuekey")
 
-# summary(issues_tgroup)

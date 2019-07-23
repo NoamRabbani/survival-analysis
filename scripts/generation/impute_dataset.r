@@ -18,10 +18,19 @@ issues$has_fix_change <- as.numeric(issues$has_fix_change)
 issues$reporter_rep <- as.numeric(issues$reporter_rep)
 issues$assignee_workload <- as.numeric(issues$assignee_workload)
 
-w <- transcan (~ priority + issuetype + is_assigned + comment_count + link_count + 
-                affect_count + fix_count + has_priority_change + 
-                has_fix_change + reporter_rep + assignee_workload,
-                 imputed=TRUE ,data = issues , pl = FALSE , pr = FALSE )
+w <- transcan (~ 
+    priority + 
+    issuetype + 
+    is_assigned + 
+    comment_count + 
+    link_count + 
+    affect_count + 
+    fix_count + 
+    # has_priority_change + 
+    has_fix_change + 
+    reporter_rep + 
+    assignee_workload,
+    imputed=TRUE ,data = issues , pl = FALSE , pr = FALSE )
 
 attach(issues)
 issues$assignee_workload <- impute(w, assignee_workload, data=issues)
