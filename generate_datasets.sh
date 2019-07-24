@@ -6,3 +6,5 @@ echo "Calling scripts/generation/filter_dataset.py"
 python scripts/generation/filter_dataset.py
 echo "Calling scripts/generation/impute_dataset.r"
 Rscript scripts/generation/impute_dataset.r
+echo "Calling scripts/generation/surv_split.r"
+Rscript scripts/generation/surv_split.r

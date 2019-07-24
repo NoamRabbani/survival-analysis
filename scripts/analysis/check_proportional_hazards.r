@@ -2,59 +2,36 @@ require("survival")
 require("survminer")
 require("rms")
 
-issues = read.csv("dataset/hbase_features_imputed.csv", header = TRUE, sep="\t")
+issues = read.csv("dataset/hbase_features_survsplit.csv", header = TRUE, sep="\t")
 
 # Apply right data types to columns.
-issues$start <- as.numeric(issues$start)
-issues$end <- as.numeric(issues$end)
 issues$priority <- factor(issues$priority)
 issues$issuetype <- factor(issues$issuetype)
 issues$is_assigned <- factor(issues$is_assigned)
-issues$comment_count <- as.numeric(issues$comment_count)
-issues$link_count <- as.numeric(issues$link_count)
-issues$affect_count <- as.numeric(issues$affect_count)
-issues$fix_count <- as.numeric(issues$fix_count)
-issues$has_priority_change <- as.numeric(issues$has_priority_change)
-issues$has_desc_change <- as.numeric(issues$has_desc_change)
-issues$has_fix_change <- as.numeric(issues$has_fix_change)
-issues$reporter_rep <- as.numeric(issues$reporter_rep)
-issues$assignee_workload <- as.numeric(issues$assignee_workload)
-
-attach(issues)
 
 dd <- datadist(issues); options(datadist = "dd")
 units(start) <- "Day"
 units(end) <- "Day"
 
-S <- Surv(start, end, is_dead)
-
-feature_set <- "full"
-if (feature_set == "full") {
-    f <- coxph(S ~ 
+f <- cph(Surv(start, end, is_dead) ~ 
         priority + 
         issuetype + 
         is_assigned + 
-        rcs(comment_count,4) + 
-        rcs(link_count, 4) +
-        rcs(affect_count, 4) + 
-        rcs(fix_count,4) + 
-        has_priority_change + 
-        has_desc_change + 
-        rcs(has_fix_change,4) + 
-        rcs(reporter_rep,4) + 
-        rcs(assignee_workload,4),
-        x=TRUE, y=TRUE)
-         
-} else if (feature_set == "partial") {
-    f <- cph(S ~ priority + issuetype + is_assigned + comment_count + rcs(link_count, 4) +
-         rcs(affect_count, 4) + rcs(fix_count,4) + has_priority_change + 
-         has_desc_change + rcs(has_fix_change,4) + rcs(reporter_rep,4) + rcs(assignee_workload,4),
-         x=TRUE, y=TRUE)
-}
-print(f, latex = TRUE, coefs = FALSE)
+        rcs(comment_count,4)*strat(tgroup) + 
+        rcs(link_count, 4)*strat(tgroup) +
+        rcs(affect_count, 4)*strat(tgroup) + 
+        rcs(fix_count,4)*strat(tgroup) + 
+        has_priority_change*strat(tgroup) + 
+        has_desc_change*strat(tgroup) + 
+        rcs(has_fix_change,4)*strat(tgroup) + 
+        rcs(reporter_rep,4)*strat(tgroup) + 
+        rcs(assignee_workload,4)*strat(tgroup),
+        x=TRUE, y=TRUE, data=issues)
+
+print(f, latex = TRUE, coefs = TRUE)
 
 z <- predict(f, type="terms")
-f.short <- cph(S ~ z, x=TRUE, y=TRUE)
+f.short <- coxph(Surv(start, end, is_dead) ~ z, x=TRUE, y=TRUE, data=issues)
 zph <- cox.zph(f.short, transform="identity")
 zph
 
