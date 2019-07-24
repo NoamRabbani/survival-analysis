@@ -20,11 +20,13 @@ import pandas as pd
 def main():
     exp = Experiments()
 
-    df = pd.read_csv("./dataset/hbase_features_filtered.csv", delimiter='\t')
-    print(df.head())
+    df = pd.read_csv("./dataset/hbase_features_survsplit.csv", delimiter='\t')
 
     exp.print_mode(df, ['priority', 'issuetype'])
-    exp.print_median(df, ['assignee_workload'])
+    exp.print_median_resolution_time(df)
+
+    describe = df.describe()
+    describe.to_csv("./scripts/analysis/describe.csv", sep="\t")
 
 
 class Experiments:
@@ -35,9 +37,10 @@ class Experiments:
         print("Mode of {}".format(columns))
         print(df.loc[:, columns].mode())
 
-    def print_median(self, df, columns):
-        print("Median of {}".format(columns))
-        print(df.loc[:, columns].mode())
+    def print_median_resolution_time(self, df):
+        resolution_rows = df.loc[df["is_dead"] == 1]
+        median = resolution_rows.loc[:, "end"].median()
+        print("Median resolution time: {}".format(median))
 
 
 if __name__ == '__main__':

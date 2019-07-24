@@ -30,5 +30,5 @@ f <- cph(Surv(start, end, is_dead) ~
 
 print(f, latex = TRUE, coefs = TRUE)
 
-v <- validate(f, u=5, B=1)
-write.table(v, "./scripts/analysis/validate.csv", quote=FALSE, sep="\t")
+a <- anova(f, test='Chisq')
+write.table(a, "./scripts/analysis/anova.csv", quote=FALSE, sep="\t")
