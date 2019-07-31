@@ -31,9 +31,9 @@ import generate_dataset  # noqa
 
 def main():
 
-    input_paths = {"issues": "./issues_hbase/"}
-    output_paths = {"reputations": "./cross_issue_data/reputation_timelines.pickle",  # noqa
-                      "workloads": "./cross_issue_data/workload_timelines.pickle"}  # noqa
+    cp = generate_dataset.CountingProcess()
+    project = "hadoop"
+    input_paths, output_paths = cp.generate_file_paths(project)
 
     cidp = CrossIssueDataProcessor()
     reputations = cidp.generate_reporter_reputations(input_paths, output_paths)
@@ -50,7 +50,7 @@ class CrossIssueDataProcessor():
         close_issues_timelines = {}
         reputation_timelines = {}
 
-        worklogs = self.generate_reporter_worklogs(input_paths)
+        worklogs = self.generate_reporter_worklogs(input_paths, output_paths)
         for reporter, worklog in worklogs.items():
             open_dates, issues_opened_on, open_issues_timeline = (
                 self.extract_opened_issues(reporter, worklog))
@@ -89,16 +89,21 @@ class CrossIssueDataProcessor():
                               "reputation_timeline": reputation_timeline}
             reputation_timelines[reporter] = timeline_entry
 
-        with open(output_paths["reputations"], 'wb') as fp:
+        output_path = os.path.join(
+            output_paths["cross_issue"], "reputation_timelines.pickle")
+        with open(output_path, 'wb') as fp:
             pickle.dump(reputation_timelines, fp)
 
-        output_path = "./cross_issue_data/open_issues_timelines.json"
+        output_path = os.path.join(
+            output_paths["cross_issue"], "open_issues_timelines.json")
         self.save_dict_as_json(output_path, open_issues_timelines)
 
-        output_path = "./cross_issue_data/close_issues_timelines.json"
+        output_path = os.path.join(
+            output_paths["cross_issue"], "close_issues_timelines.json")
         self.save_dict_as_json(output_path, close_issues_timelines)
 
-        output_path = "./cross_issue_data/reputation_timelines.json"
+        output_path = os.path.join(
+            output_paths["cross_issue"], "reputation_timelines.json")
         self.save_dict_as_json(output_path, reputation_timelines)
 
         return reputation_timelines
@@ -108,7 +113,7 @@ class CrossIssueDataProcessor():
         unassigned_issues_timelines = {}
         workload_timelines = {}
 
-        worklogs = self.generate_assignee_worklogs(input_paths)
+        worklogs = self.generate_assignee_worklogs(input_paths, output_paths)
         for assignee, worklog in worklogs.items():
             assigned_dates, issues_assigned_on, assigned_issues_timeline = (
                 self.extract_assigned_issues(assignee, worklog))
@@ -147,16 +152,21 @@ class CrossIssueDataProcessor():
                               "workload_timeline": workload_timeline}
             workload_timelines[assignee] = timeline_entry
 
-        with open(output_paths["workloads"], 'wb') as fp:
+        output_path = os.path.join(
+            output_paths["cross_issue"], "workload_timelines.pickle")
+        with open(output_path, 'wb') as fp:
             pickle.dump(workload_timelines, fp)
 
-        output_path = "./cross_issue_data/assigned_issues_timelines.json"
+        output_path = os.path.join(
+            output_paths["cross_issue"], "assigned_issues_timelines.json")
         self.save_dict_as_json(output_path, assigned_issues_timelines)
 
-        output_path = "./cross_issue_data/unassigned_issues_timelines.json"
+        output_path = os.path.join(
+            output_paths["cross_issue"], "unassigned_issues_timelines.json")
         self.save_dict_as_json(output_path, unassigned_issues_timelines)
 
-        output_path = "./cross_issue_data/workloads_timelines.json"
+        output_path = os.path.join(
+            output_paths["cross_issue"], "workloads_timelines.json")
         self.save_dict_as_json(output_path, workload_timelines)
 
         return workload_timelines
@@ -240,7 +250,7 @@ class CrossIssueDataProcessor():
             assigned_issues_timeline[date] = cumulative_assigned_issues
         return dates, issues_assigned_on, assigned_issues_timeline
 
-    def generate_reporter_worklogs(self, input_paths, output_path=None):
+    def generate_reporter_worklogs(self, input_paths, output_paths):
         worklogs = {}
         for filename in os.listdir(input_paths["issues"]):
             issue_path = os.path.join(input_paths["issues"], filename)
@@ -263,12 +273,13 @@ class CrossIssueDataProcessor():
             worklogs[reporter] = worklogs.get(reporter, [])
             worklogs[reporter].append(worklog_entry)
 
-        output_path = "./cross_issue_data/reporter_worklogs.json"
+        output_path = os.path.join(
+            output_paths["cross_issue"], "reporter_worklogs.json")
         self.save_dict_as_json(output_path, worklogs)
 
         return worklogs
 
-    def generate_assignee_worklogs(self, input_paths):
+    def generate_assignee_worklogs(self, input_paths, output_paths):
         worklogs = {}
 
         cp = generate_dataset.CountingProcess()
@@ -309,7 +320,8 @@ class CrossIssueDataProcessor():
             worklogs[prev_assignee] = worklogs.get(prev_assignee, [])
             worklogs[prev_assignee].append(worklog_entry)
 
-        output_path = "./cross_issue_data/assignee_worklogs.json"
+        output_path = os.path.join(
+            output_paths["cross_issue"], "assignee_worklogs.json")
         self.save_dict_as_json(output_path, worklogs)
 
         return worklogs

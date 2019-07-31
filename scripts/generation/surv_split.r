@@ -1,13 +1,24 @@
 require("survival")
 require("survminer")
 require("rms")
+require("here")
 
-issues = read.csv("dataset/hbase_features_imputed.csv", header = TRUE, sep="\t")
+args = commandArgs(trailingOnly=TRUE)
+
+# test if there is at least one argument: if not, return an error
+if (length(args)==0) {
+  stop("At least one argument must be supplied", call.=FALSE)
+}
+
+path = here("datasets", args[1], "raw.csv")
+issues = read.csv(path, header = TRUE, sep="\t")
 
 # Apply right data types to columns.
 issues$priority <- factor(issues$priority)
 issues$issuetype <- factor(issues$issuetype)
 issues$is_assigned <- factor(issues$is_assigned)
 
-issues2 <- survSplit(Surv(start, end, is_dead) ~., data=issues, cut=c(30, 60, 90, 180, 270), episode="tgroup")
-write.table(issues2, "./dataset/hbase_features_survsplit.csv", quote=FALSE, sep="\t")
+issues2 <- survSplit(Surv(start, end, is_dead) ~., data=issues, cut=c(365), episode="should_censor")
+
+path = here("datasets", args[1], "survsplit.csv")
+write.table(issues2, path, quote=FALSE, sep="\t", row.names=FALSE)

@@ -1,3 +1,4 @@
+set -o errexit
 echo "Calling scripts/generation/find_outliers.r"
 Rscript scripts/generation/find_outliers.r
 echo "Calling scripts/generation/filter_dataset.py"

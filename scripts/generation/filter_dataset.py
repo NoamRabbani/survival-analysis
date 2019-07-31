@@ -26,19 +26,26 @@ import numpy as np
 from dateutil.parser import parse
 from copy import deepcopy
 from datetime import datetime, timezone
+import sys
 
 
 def main():
-    input_paths = {"raw_dataset": "./dataset/hbase_features_raw.csv",
-                   "which_influence": "./scripts/generation/which_influence.csv"}  # noqa
-    output_paths = {"filtered_dataset": "./dataset/hbase_features_filtered.csv"}  # noqa
+
+    if len(sys.argv) < 2:
+        print("Must specify project to scrape")
+        exit()
+
+    project = sys.argv[1]
+
+    input_paths = {"raw_dataset": "./datasets/{}/survsplit.csv".format(project),  # noqa
+                   "outliers": "./artifacts/{}/outliers.csv".format(project)}  # noqa
+    output_paths = {"filtered_dataset": "./datasets/{}/filtered.csv".format(project)}  # noqa
 
     df = pd.read_csv(input_paths["raw_dataset"], sep='\t')
     initial_issue_count = df["issuekey"].nunique()
 
     f = Filter()
-    df = f.filter_which_influence(df, input_paths["which_influence"])
-    # df = f.filter_feature(df, "end", 730)
+    df = f.filter_outliers(df, input_paths["outliers"])
     df = f.censor_observations(df, 365)
 
     final_issue_count = df["issuekey"].nunique()
@@ -69,7 +76,7 @@ class Filter:
 
         return df
 
-    def filter_which_influence(self, df, which_influence_path):
+    def filter_outliers(self, df, which_influence_path):
         """ Removes issues overly influential observations
 
         Based on the output of which.influence in R

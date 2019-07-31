@@ -18,16 +18,17 @@ Email: hello@noamrabbani.com
 
 import pickle
 import sys
+import os
 sys.path.insert(0, "./scripts/generation/")
 import generate_dataset  # noqa
 
 
 def main():
-    input_paths = {"issues": "issues_hbase/",
-                "reputations": "./cross_issue_data/reputation_timelines.pickle",  # noqa
-                "workloads": "./cross_issue_data/workload_timelines.pickle"}  # noqa
+    cp = generate_dataset.CountingProcess()
+    project = "hadoop"
+    input_paths, output_paths = cp.generate_file_paths(project)
     c = Caller()
-    c.call_generate_issue_states(input_paths, "HBASE-10000")
+    c.call_generate_issue_states(input_paths, "HADOOP-1")
 
 
 class Caller:
@@ -40,7 +41,7 @@ class Caller:
             workloads = pickle.load(fp)
         first_resolution = False
         increment_resolution_date = True
-        issue_path = input_paths["issues"] + issuekey
+        issue_path = os.path.join(input_paths["issues"], issuekey)
         issue_states, issue_dates = cp.generate_issue_states(
             issue_path, first_resolution, increment_resolution_date,
             reputations, workloads)

@@ -27,32 +27,30 @@ import pandas as pd
 from dateutil.parser import parse
 from copy import deepcopy
 from datetime import datetime, timezone, timedelta
+import sys
 
 
 def main():
-    input_paths = {"issues": "issues_hbase/",
-                   "reputations": "./cross_issue_data/reputation_timelines.pickle",  # noqa
-                   "workloads": "./cross_issue_data/workload_timelines.pickle"}  # noqa
-    output_paths = {"hbase_raw": "./dataset/hbase_features_raw.csv"}
-    logging.basicConfig(level=logging.INFO, filename="log", filemode='w')
-    logging.info("issuekey, reason")
 
-    cp = CountingProcess()
+    if len(sys.argv) < 2:
+        print("Must specify project as argument")
+        exit()
 
+    project = sys.argv[1]
     include_cross_issue_features = True
-    first_resolution = False
+    use_first_resolution = False
     increment_resolution_date = True
 
-    if include_cross_issue_features:
-        with open(input_paths["reputations"], 'rb') as fp:
-            reputations = pickle.load(fp)
-        with open(input_paths["workloads"], 'rb') as fp:
-            workloads = pickle.load(fp)
-    else:
-        reputations = None
-        workloads = None
+    cp = CountingProcess()
+    input_paths, output_paths = cp.generate_file_paths(project)
 
-    cp.generate_dataset(input_paths, output_paths, first_resolution,
+    logging.basicConfig(level=logging.INFO, filename=output_paths["logs"], filemode='w')
+    logging.info("issuekey, reason")
+
+    reputations, workloads = cp.load_cross_issue_data(
+        input_paths, include_cross_issue_features)
+
+    cp.generate_dataset(input_paths, output_paths, use_first_resolution,
                         increment_resolution_date, reputations, workloads)
 
 
@@ -60,16 +58,16 @@ class CountingProcess:
     """ Generates a counting process dataset from JSON issue data.
     """
 
-    def generate_dataset(self, input_paths, output_paths, first_resolution,
+    def generate_dataset(self, input_paths, output_paths, use_first_resolution,
                          increment_resolution_date, reputations=None,
                          workloads=None):
         """ Generates the dataset in the counting process format
 
         Args:
             input_paths: Dictionary containing paths of input files.
-            output_path: Dictionary containing paths of output files
-            first_resolution: Boolean indicating if we should use the first
-                              time an issue is resolved
+            output_path: Dictionary containing paths of output files.
+            use_first_resolution: Boolean indicating if we should use the first
+                                  time an issue is resolved
             increment_resolution_date: Boolean indicating if the resolution
                             date should be incremented by one day
             reputations: Dictionary containing the reputation of each user and
@@ -81,7 +79,7 @@ class CountingProcess:
         for filename in sorted(os.listdir(input_paths["issues"])):
             issue_path = os.path.join(input_paths["issues"], filename)
             issue_states, issue_dates = self.generate_issue_states(
-                issue_path, first_resolution, increment_resolution_date,
+                issue_path, use_first_resolution, increment_resolution_date,
                 reputations, workloads)
             issue_rows = self.generate_counting_process_rows(
                 issue_states, issue_dates, reputations, workloads)
@@ -109,7 +107,7 @@ class CountingProcess:
         if workloads:
             columns.append("assignee_workload")
         df = pd.DataFrame(rows, columns=columns)
-        df.to_csv(output_paths["hbase_raw"], sep="\t", index=False)
+        df.to_csv(output_paths["raw_dataset"], sep="\t", index=False)
 
     def generate_issue_states(self, issue_path, first_resolution,
                               increment_resolution_date, reputations,
@@ -421,7 +419,7 @@ class CountingProcess:
         while date <= issue_dates[-1] and idx < len(reputation_dates):
             date = reputation_dates[idx]
             reporter_rep = reputation_timeline[date]
-            if abs(reporter_rep - prev_reporter_rep >= 0.01):
+            if abs(reporter_rep - prev_reporter_rep) >= 0.01:
                 prev_reporter_rep = reporter_rep
                 if date < issue_dates[0]:
                     date = issue_dates[0]
@@ -907,8 +905,9 @@ class CountingProcess:
         Returns:
             resolution_date: Date containing the resolution_date
         """
+        today_date = datetime.now(timezone.utc).date()
         if issue["fields"]["resolutiondate"] is None:
-            resolution_date = datetime.now(timezone.utc).date()
+            resolution_date = today_date
             return resolution_date
         else:
             if first_resolution:
@@ -917,16 +916,72 @@ class CountingProcess:
                     for item in change["items"]:
                         if item["field"] == "resolution":
                             resolution_date = date
-                            if increment_resolution_date:
+                            if (increment_resolution_date and
+                                    resolution_date < today_date):
                                 resolution_date += timedelta(days=1)
                             return resolution_date
             else:
                 resolution_date = parse(
                     issue["fields"]["resolutiondate"]).date()
-                if increment_resolution_date:
+                if increment_resolution_date and resolution_date < today_date:
                     resolution_date = (resolution_date +
                                        timedelta(days=1))
                 return resolution_date
+
+    def load_cross_issue_data(self, input_paths, include_cross_issue_features):
+        """ Loads the cross issue JSON data into dicts
+
+        Args:
+            input_paths: Dictionary containing paths of input files.
+            include_cross_issue_features: bool indicating if we want to
+                                          include cross issue features.
+        Returns:
+            reputations: Dictionary containing the reputation of each user and
+                         how it changes over time.
+            workloads: Dictionary containing the workloads of each user and
+                         how it changes over time.
+        """
+        if include_cross_issue_features:
+            with open(input_paths["reputations"], 'rb') as fp:
+                reputations = pickle.load(fp)
+            with open(input_paths["workloads"], 'rb') as fp:
+                workloads = pickle.load(fp)
+        else:
+            reputations = None
+            workloads = None
+        return reputations, workloads
+
+    def generate_file_paths(self, project):
+        """ Generates the input and output paths for the project.
+
+        Args:
+            project: Project for which we are generating the dataset.
+        Returns:
+            input_paths: Dictionary containing paths of input files.
+            output_path: Dictionary containing paths of output files.
+        """
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+
+        reputations = os.path.join(
+            dir_path, "..", "..", "cross_issue_data", project,
+            "reputation_timelines.pickle")
+        workloads = os.path.join(
+            dir_path, "..", "..", "cross_issue_data", project,
+            "workload_timelines.pickle")
+        issues = os.path.join(dir_path, "..", "..", "issues", project)
+        input_paths = {"issues": issues,
+                       "reputations": reputations,
+                       "workloads": workloads}
+
+        raw_dataset = os.path.join(
+            dir_path, "..", "..", "datasets", project, "raw.csv")
+        cross_issue = os.path.join(
+            dir_path, "..", "..", "cross_issue_data", project)
+        logs = os.path.join(dir_path, "..", "..", "logs", project, "log.csv")
+        output_paths = {"raw_dataset": raw_dataset,
+                        "cross_issue": cross_issue,
+                        "logs": logs}
+        return input_paths, output_paths
 
 
 if __name__ == "__main__":

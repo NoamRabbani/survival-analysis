@@ -1,34 +1,28 @@
 require("survival")
 require("survminer")
 require("rms")
+require("here")
 
-issues = read.csv("dataset/hbase_features_survsplit.csv", header = TRUE, sep="\t")
+args = commandArgs(trailingOnly=TRUE)
 
-# Apply right data types to columns.
-issues$priority <- factor(issues$priority)
-issues$issuetype <- factor(issues$issuetype)
-issues$is_assigned <- factor(issues$is_assigned)
+# test if there is at least one argument: if not, return an error
+if (length(args)!=1) {
+  stop("At least one argument must be supplied", call.=FALSE)
+}
 
-dd <- datadist(issues); options(datadist = "dd")
-units(start) <- "Day"
-units(end) <- "Day"
 
-f <- cph(Surv(start, end, is_dead) ~ 
-        priority + 
-        issuetype + 
-        is_assigned + 
-        rcs(comment_count,4)*strat(tgroup) + 
-        rcs(link_count, 4)*strat(tgroup) +
-        rcs(affect_count, 4)*strat(tgroup) + 
-        rcs(fix_count,4)*strat(tgroup) + 
-        has_priority_change*strat(tgroup) + 
-        has_desc_change*strat(tgroup) + 
-        rcs(has_fix_change,4)*strat(tgroup) + 
-        rcs(reporter_rep,4)*strat(tgroup) + 
-        rcs(assignee_workload,4)*strat(tgroup),
-        x=TRUE, y=TRUE, surv=TRUE, data=issues)
+path = here("datasets", args[1], "imputed.csv")
+issues = read.csv(path, header = TRUE, sep="\t")
 
-print(f, latex = TRUE, coefs = TRUE)
+path = here("artifacts", args[1], "cph_model.Rdata")
+load(path)
 
-v <- validate(f, u=5, B=1)
-write.table(v, "./scripts/analysis/validate.csv", quote=FALSE, sep="\t")
+
+# get median resolution time of issues
+resolution_rows = subset(issues, is_dead == 1)
+median_resolution_time = median(resolution_rows$end)
+
+v <- validate(f, u=median_resolution_time, B=1)
+v
+path = here("artifacts", args[1], "validate.csv")
+write.table(v, path, quote = FALSE, sep="\t", row.names=FALSE)
