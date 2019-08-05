@@ -6,6 +6,8 @@ then
   exit 1
 fi
 
+# echo "Calling scripts/generation/extract_cross_issue_data.py"
+# python scripts/generation/extract_cross_issue_data.py $1
 echo "Calling scripts/generation/generate_dataset.py"
 python scripts/generation/generate_dataset.py $1
 echo "Calling scripts/generation/surv_split.r"
