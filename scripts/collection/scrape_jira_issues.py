@@ -34,8 +34,8 @@ def main():
     output_dir = os.path.join(".", "issues", project)
     sc = IssueScraper()
 
-    years = list(range(2002, 2020))
-    sc.scrape_issues(project, years, output_dir)
+    years = list(range(2019, 2020))
+    # sc.scrape_issues(project, years, output_dir)
     sc.scrape_issue_comments(output_dir)
 
 
@@ -66,7 +66,7 @@ class IssueScraper:
                     'project={} and created >= "{}/01/01" and created <= "{}/12/31"&maxResults=-1&startAt={}&expand=changelog'  # noqa
                     .format(project, y, y, start_at)
                 )
-                json_data = self.http_get_request(url, delay=10)
+                json_data = self.http_get_request(url, delay=30)
 
                 if len(json_data['issues']) == 0:
                     break

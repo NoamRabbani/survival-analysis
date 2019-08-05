@@ -2,6 +2,7 @@ require("survival")
 require("survminer")
 require("rms")
 require("here")
+require("broom")
 
 args = commandArgs(trailingOnly=TRUE)
 
@@ -17,4 +18,4 @@ a <- anova(f, test='Chisq')
 a
 
 path = here("artifacts", args[1], "anova.csv")
-write.table(a, path, quote = FALSE, sep="\t", row.names=FALSE)
+write.table(tidy(a), path, quote = FALSE, sep=";", row.names=FALSE)

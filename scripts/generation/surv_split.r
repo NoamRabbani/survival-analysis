@@ -19,6 +19,7 @@ issues$issuetype <- factor(issues$issuetype)
 issues$is_assigned <- factor(issues$is_assigned)
 
 issues2 <- survSplit(Surv(start, end, is_dead) ~., data=issues, cut=c(365), episode="should_censor")
+issues2$should_censor <- issues2$should_censor - 1
 
 path = here("datasets", args[1], "survsplit.csv")
 write.table(issues2, path, quote=FALSE, sep="\t", row.names=FALSE)

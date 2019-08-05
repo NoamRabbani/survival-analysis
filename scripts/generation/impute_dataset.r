@@ -47,6 +47,21 @@ if (args[1] == "hbase"){
       reporter_rep + 
       assignee_workload,
       imputed=TRUE ,data = issues , pl = FALSE , pr = FALSE )
+} else if (args[1] == "hive"){
+  w <- transcan (~ 
+      priority + 
+      issuetype + 
+      is_assigned + 
+      comment_count + 
+      link_count + 
+      affect_count + 
+      # fix_count + 
+      # has_priority_change + 
+      has_fix_change + 
+      # has_desc_change + 
+      reporter_rep + 
+      assignee_workload,
+      imputed=TRUE ,data = issues , pl = FALSE , pr = FALSE )
 }
 
 attach(issues)

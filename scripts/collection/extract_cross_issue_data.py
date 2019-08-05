@@ -31,8 +31,13 @@ import generate_dataset  # noqa
 
 def main():
 
+    # if len(sys.argv) < 2:
+    #     print("Must specify project as argument")
+    #     exit()
+
+    project = "maven"
+
     cp = generate_dataset.CountingProcess()
-    project = "hadoop"
     input_paths, output_paths = cp.generate_file_paths(project)
 
     cidp = CrossIssueDataProcessor()

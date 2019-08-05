@@ -1,0 +1,46 @@
+.rownames;Chi.Square;d.f.;P
+priority;839.364051945489;4;0
+issuetype;415.718460695028;8;0
+is_assigned;697.308353158065;1;0
+comment_count  (Factor+Higher Order Factors);5505.85249255089;12;0
+ All Interactions;69.9971260424145;9;1.52466927971773e-11
+ Nonlinear (Factor+Higher Order Factors);3455.45753704821;8;0
+link_count  (Factor+Higher Order Factors);97.1538448565573;8;0
+ All Interactions;42.7431357130405;6;1.31122051660881e-07
+ Nonlinear (Factor+Higher Order Factors);8.93312508722205;4;0.0627929455056222
+affect_count;66.7022216047102;2;3.33066907387547e-15
+ Nonlinear;19.2717046978202;1;1.1337413210466e-05
+fix_count  (Factor+Higher Order Factors);2579.73043385897;8;0
+ All Interactions;300.938814105393;6;0
+ Nonlinear (Factor+Higher Order Factors);1087.61850654106;4;0
+has_priority_change  (Factor+Higher Order Factors);71.9014302982676;4;8.99280649946377e-15
+ All Interactions;27.1417223872879;3;5.49802298710489e-06
+has_desc_change;25.9936140976451;1;3.42548553078359e-07
+has_fix_change  (Factor+Higher Order Factors);1330.08515211985;8;0
+ All Interactions;84.9339445540208;6;3.33066907387547e-16
+ Nonlinear (Factor+Higher Order Factors);339.569301632174;4;0
+reporter_rep;1569.85010138991;3;0
+ Nonlinear;613.238563465522;2;0
+assignee_workload  (Factor+Higher Order Factors);491.566138233842;12;0
+ All Interactions;159.818993298585;9;0
+ Nonlinear (Factor+Higher Order Factors);371.79966860116;8;0
+comment_count * tgroup  (Factor+Higher Order Factors);69.9971260424145;9;1.52466927971773e-11
+ Nonlinear;63.3217325565431;6;9.49063050370569e-12
+ Nonlinear Interaction : f(A,B) vs. AB;63.3217325565431;6;9.49063050370569e-12
+tgroup * link_count  (Factor+Higher Order Factors);42.7431357130405;6;1.31122051660881e-07
+ Nonlinear;5.20330530922495;3;0.157501263680653
+ Nonlinear Interaction : f(A,B) vs. AB;5.20330530922495;3;0.157501263680653
+tgroup * fix_count  (Factor+Higher Order Factors);300.938814105393;6;0
+ Nonlinear;31.1660497244914;3;7.84292374933493e-07
+ Nonlinear Interaction : f(A,B) vs. AB;31.1660497244914;3;7.84292374933493e-07
+tgroup * has_priority_change  (Factor+Higher Order Factors);27.1417223872879;3;5.49802298710489e-06
+tgroup * has_fix_change  (Factor+Higher Order Factors);84.9339445540208;6;3.33066907387547e-16
+ Nonlinear;13.9503534502488;3;0.0029735150044049
+ Nonlinear Interaction : f(A,B) vs. AB;13.9503534502488;3;0.0029735150044049
+tgroup * assignee_workload  (Factor+Higher Order Factors);159.818993298585;9;0
+ Nonlinear;90.9724359296649;6;0
+ Nonlinear Interaction : f(A,B) vs. AB;90.9724359296649;6;0
+TOTAL NONLINEAR;7071.81279461462;31;0
+TOTAL INTERACTION;685.820875982741;39;0
+TOTAL NONLINEAR + INTERACTION;8751.89793802194;49;0
+TOTAL;25801.2510442942;71;0
