@@ -6,15 +6,13 @@ then
   exit 1
 fi
 
-# echo "Calling scripts/generation/extract_cross_issue_data.py"
-# python scripts/generation/extract_cross_issue_data.py $1
-echo "Calling scripts/generation/generate_dataset.py"
+echo " ### Calling scripts/generation/extract_cross_issue_data.py ###"
+python scripts/generation/extract_cross_issue_data.py $1
+echo " ### Calling scripts/generation/generate_dataset.py ###"
 python scripts/generation/generate_dataset.py $1
-echo "Calling scripts/generation/surv_split.r"
+echo "### Calling scripts/generation/surv_split.r ###"
 Rscript scripts/generation/surv_split.r $1
-echo "Calling scripts/generation/find_outliers.r"
-Rscript scripts/generation/find_outliers.r $1
-echo "Calling scripts/generation/filter_dataset.py"
+echo "### Calling scripts/generation/filter_dataset.py ###"
 python scripts/generation/filter_dataset.py $1
-echo "Calling scripts/generation/impute_dataset.r"
+echo "### Calling scripts/generation/impute_dataset.r ###"
 Rscript scripts/generation/impute_dataset.r $1

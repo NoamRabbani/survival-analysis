@@ -44,8 +44,6 @@ def main():
     cp = CountingProcess()
     input_paths, output_paths = cp.generate_file_paths(project)
 
-    # if not os.path.exists(output_paths["dir_logs"]):
-    #     os.makedirs(directory)
     logging.basicConfig(level=logging.INFO, filename=output_paths["logs"],
                         filemode='w')
     logging.info("issuekey, reason")

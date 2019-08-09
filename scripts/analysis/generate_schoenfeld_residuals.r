@@ -53,6 +53,36 @@ if (args[1] == "hbase"){
       rcs(reporter_rep,4) + 
       rcs(assignee_workload,4),
       x=TRUE, y=TRUE, data=issues)     
+} else if (args[1] == "hive"){
+  f <- cph(Surv(start, end, is_dead) ~ 
+      priority + 
+      issuetype + 
+      is_assigned + 
+      rcs(comment_count,4) + 
+      rcs(link_count, 4) +
+      rcs(affect_count, 4) + 
+      fix_count + 
+      has_priority_change + 
+      has_desc_change + 
+      has_fix_change + 
+      rcs(reporter_rep,4) + 
+      rcs(assignee_workload,4),
+      x=TRUE, y=TRUE, data=issues)     
+} else if (args[1] == "ignite"){
+  f <- cph(Surv(start, end, is_dead) ~ 
+      priority + 
+      issuetype + 
+      is_assigned + 
+      rcs(comment_count,4) + 
+      rcs(link_count, 4) +
+      affect_count + 
+      fix_count + 
+      rcs(has_priority_change, 4) + 
+      has_desc_change + 
+      rcs(has_fix_change, 4) + 
+      rcs(reporter_rep,4) + 
+      rcs(assignee_workload,4),
+      x=TRUE, y=TRUE, data=issues)     
 }
 
 

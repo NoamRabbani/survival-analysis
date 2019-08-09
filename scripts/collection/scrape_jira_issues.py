@@ -31,26 +31,27 @@ def main():
 
     project = sys.argv[1]
 
-    output_dir = os.path.join(".", "issues", project)
     sc = IssueScraper()
 
-    years = list(range(2019, 2020))
-    # sc.scrape_issues(project, years, output_dir)
-    sc.scrape_issue_comments(output_dir)
+    years = list(range(2003, 2020))
+    # sc.scrape_issues(project, years)
+    sc.scrape_issue_comments(project)
 
 
 class IssueScraper:
 
-    def scrape_issues(self, project, years, output_dir):
+    def scrape_issues(self, project, years):
         """ Scrapes issues given a project and year range
 
         Scrapes issues project and saves them as individual JSON files.
 
         Args:
-            project: String of project to scrape
+            project: Name of project to scrape
             years: List of years in which the issues were opened in
-            output_dir: Directory where issues get saved as JSON files
         """
+        module_path = os.path.dirname(os.path.realpath(__file__))
+        output_dir = os.path.join(module_path, "..", "..", "issues", project)
+
         if not os.path.exists(output_dir):
             os.mkdir(output_dir)
 
@@ -80,7 +81,7 @@ class IssueScraper:
                         print(file_path + ' already exists')
                 start_at += 1000
 
-    def scrape_issue_comments(self, issues_dir):
+    def scrape_issue_comments(self, project):
         """ Scrapes and appends comments for each issue in issues_dir
 
         JIRA does not support scraping the comments of an issue along all its
@@ -89,8 +90,11 @@ class IssueScraper:
         file.
 
         Args:
-            issues_dir: Directory that contains JSON issues
+            project: Name of project to scrape
         """
+        module_path = os.path.dirname(os.path.realpath(__file__))
+        issues_dir = os.path.join(module_path, "..", "..", "issues", project)
+
         issues_with_broken_comments = []
         for filename in os.listdir(issues_dir):
             path = os.path.join(issues_dir, filename)
@@ -119,7 +123,9 @@ class IssueScraper:
             with open(path, 'w') as f:
                 json.dump(issue_json_data, f)
 
-        path = os.path.join(issues_dir, 'issues_with_broken_comments.csv')
+        comment_log_path = os.path.join(
+            module_path, "..", "..", "logs", project,
+            "issues_with_broken_comments.csv")
         with open(path, 'w') as f:
             json.dump(issues_with_broken_comments, f)
 

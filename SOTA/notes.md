@@ -1,5 +1,24 @@
 # Papers that propose a model
 
+## habayeb2018tse
+    * Proposes a hidden markov chain (HMM) model uses temporal features to achieve SOTA results in classifying bugs as slow resolution and fast resolution.
+    * Replicates what they consider the SOTA (zhang2013icse) and achieves 33% higher F-measure.
+
+## akbarinasaji2018jsas
+    * Replicates zhang2013icse (KNN learner with custon distance metric) and determines that the model is generalizable and that it can be used for further research.
+
+## rees-jones2017cornell
+    * Uses a decision tree with seven creation-time features to achieve SOTA results in predicting issue resolution times.
+    * Gets their data and features from the JIRA of apache projects.
+    * Claims that training a learner on cross-project data improves the performance of the model.
+    * Claims that the model by zhang2013icse is complicated and difficult to interpret.
+    * Claims that kikas2016msr, which uses random forests, is the SOTA.
+
+## asar2016ese
+    * Replicates the work of an original paper in detail to obtain defect resolution time based on text clustering.
+    * Extends the original paper by applying the model to a new context and obtains poor accuracy. Argues that this model does not achieve practically useful levels of accuracy.
+    * Has a great summary of previous work on bug fix time.
+
 ## jiang2013msr
     * Measures how much time it takes for a patch to get accepted.
     * Uses decision trees with 35 features to determine wether a patch will be accepted in the linux project. Uses top node analysis to determine which features have the most influence.

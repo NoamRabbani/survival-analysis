@@ -45,7 +45,7 @@ def main():
     initial_issue_count = df["issuekey"].nunique()
 
     f = Filter()
-    df = f.filter_outliers(df, input_paths["outliers"])
+    # df = f.filter_outliers(df, input_paths["outliers"])
     df = f.censor_observations(df, 365)
 
     final_issue_count = df["issuekey"].nunique()
