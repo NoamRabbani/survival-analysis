@@ -21,6 +21,7 @@ import os
 import pandas
 import time
 import sys
+import logging
 
 
 def main():
@@ -30,6 +31,13 @@ def main():
         exit()
 
     project = sys.argv[1]
+
+    module_path = os.path.dirname(os.path.realpath(__file__))
+    path = os.path.join(module_path, "..", "..", "logs",
+                        project, "malformed_issues.csv")
+    logging.basicConfig(level=logging.INFO, filename=path,
+                        filemode='w')
+    logging.info("issuekey, reason")
 
     sc = IssueScraper()
 
@@ -61,7 +69,6 @@ class IssueScraper:
             while True:
                 print("Scraping issues {}-{}"
                       .format(start_at, start_at+1000))
-                #
                 url = (
                     'https://issues.apache.org/jira/rest/api/2/search?jql=' +  # noqa
                     'project={} and created >= "{}/01/01" and created <= "{}/12/31"&maxResults=-1&startAt={}&expand=changelog'  # noqa
@@ -75,8 +82,12 @@ class IssueScraper:
                 for issue in json_data['issues']:
                     file_path = os.path.join(output_dir, issue['key'])
                     if not os.path.exists(file_path):
-                        with open(file_path, 'w') as f:
-                            json.dump(issue, f)
+                        if not issue["fields"]["creator"]:
+                            logging.info(
+                                "{}, Issue creator is None".format(issue['key']))
+                        else:
+                            with open(file_path, 'w') as f:
+                                json.dump(issue, f)
                     else:
                         print(file_path + ' already exists')
                 start_at += 1000
@@ -112,7 +123,7 @@ class IssueScraper:
                 '/comment'
             )
             print("Scraping {}".format(filename))
-            comment_json_data = self.http_get_request(url, delay=0)
+            comment_json_data = self.http_get_request(url, delay=0.1)
 
             try:
                 issue_json_data['comments'] = comment_json_data['comments']
