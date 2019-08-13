@@ -42,7 +42,7 @@ def main():
     sc = IssueScraper()
 
     years = list(range(2003, 2020))
-    # sc.scrape_issues(project, years)
+    sc.scrape_issues(project, years)
     sc.scrape_issue_comments(project)
 
 
@@ -123,7 +123,7 @@ class IssueScraper:
                 '/comment'
             )
             print("Scraping {}".format(filename))
-            comment_json_data = self.http_get_request(url, delay=0.1)
+            comment_json_data = self.http_get_request(url, delay=0.4)
 
             try:
                 issue_json_data['comments'] = comment_json_data['comments']

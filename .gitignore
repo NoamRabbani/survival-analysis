@@ -1,6 +1,6 @@
 #custom
-*/issues/
-*/issues_old/
+/issues/
+/issues_old/
 *.csv#
 XDG_CACHE_HOME
 .~*
