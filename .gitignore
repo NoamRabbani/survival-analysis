@@ -1,7 +1,6 @@
 #custom
-input
-issues
-issues_hbase
+/issues/
+/issues_old/
 *.csv#
 XDG_CACHE_HOME
 .~*
